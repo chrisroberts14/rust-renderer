@@ -15,8 +15,8 @@ impl Vec3 {
         Self { x, y, z }
     }
 
-    pub fn scale(&self, factor: f32) -> Vec3 {
-        Vec3::new(self.x * factor, self.y * factor, self.z * factor)
+    pub fn scale(&self, factor: f32) -> Self {
+        Self::new(self.x * factor, self.y * factor, self.z * factor)
     }
 
     pub fn project_to_2d(&self, width: usize, height: usize) -> Vec2 {
@@ -26,10 +26,10 @@ impl Vec3 {
     }
 
     // Rotate around X axis
-    pub fn rotate_x(&self, angle_rad: f32) -> Vec3 {
+    pub fn rotate_x(&self, angle_rad: f32) -> Self {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Vec3 {
+        Self {
             x: self.x,
             y: self.y * cos - self.z * sin,
             z: self.y * sin + self.z * cos,
@@ -37,10 +37,10 @@ impl Vec3 {
     }
 
     // Rotate around Y axis
-    pub fn rotate_y(&self, angle_rad: f32) -> Vec3 {
+    pub fn rotate_y(&self, angle_rad: f32) -> Self {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Vec3 {
+        Self {
             x: self.x * cos + self.z * sin,
             y: self.y,
             z: -self.x * sin + self.z * cos,
@@ -48,10 +48,10 @@ impl Vec3 {
     }
 
     // Rotate around Z axis
-    pub fn rotate_z(&self, angle_rad: f32) -> Vec3 {
+    pub fn rotate_z(&self, angle_rad: f32) -> Self {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Vec3 {
+        Self {
             x: self.x * cos - self.y * sin,
             y: self.x * sin + self.y * cos,
             z: self.z,
