@@ -6,7 +6,7 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
-use crate::line::Line;
+use crate::shapes::line::Line;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;

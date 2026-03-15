@@ -3,7 +3,7 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod framebuffer;
-mod line;
+mod shapes;
 use app::App;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
