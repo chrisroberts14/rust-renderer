@@ -93,6 +93,22 @@ impl ApplicationHandler for App {
                 pixels.render().unwrap();
                 self.window.as_ref().unwrap().request_redraw();
             }
+            WindowEvent::SurfaceResized(size) => {
+                let width = size.width;
+                let height = size.height;
+
+                let surface_texture =
+                    SurfaceTexture::new(width, height, self.window.as_ref().unwrap());
+                // extend lifetime
+                let pixels = unsafe {
+                    std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
+                        Pixels::new(width, height, surface_texture).unwrap(),
+                    )
+                };
+
+                self.pixels = Some(pixels);
+                self.framebuffer.resize(width as usize, height as usize);
+            }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
