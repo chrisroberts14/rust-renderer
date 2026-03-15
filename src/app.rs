@@ -6,7 +6,8 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
-use crate::shapes::line::Line;
+use crate::shapes::Shape;
+use crate::shapes::triangle::Triangle;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -26,14 +27,6 @@ impl App {
         }
     }
 
-    pub fn draw_line(&mut self, line: Line) {
-        let colour = [0, 255, 0, 255];
-        let pixels = line.get_intermediary_pixels();
-        for (x, y) in pixels {
-            self.framebuffer.set_pixel(x, y, colour);
-        }
-    }
-
     /// Handle keyboard entries
     /// This mainly exists as a helper to prevent the window_event function
     /// from becoming too large
@@ -46,8 +39,8 @@ impl App {
                 self.framebuffer.clear([0, 0, 0, 255]);
             }
             Key::Character(ch) if ch == "d" => {
-                let line = Line::new(0, 0, WIDTH as usize, HEIGHT as usize);
-                self.draw_line(line);
+                let triangle = Triangle::new((0, 0), (100, 100), (100, 200));
+                triangle.draw(&mut self.framebuffer);
             }
             _ => {}
         }
