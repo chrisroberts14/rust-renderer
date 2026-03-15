@@ -1,14 +1,15 @@
-use pixels::SurfaceTexture;
-use winit::{event_loop::EventLoop};
+use winit::event_loop::ControlFlow;
+use winit::event_loop::EventLoop;
 
-mod framebuffer;
 mod app;
-//use framebuffer::Framebuffer;
+mod framebuffer;
+mod line;
 use app::App;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
-    let app= App::new();
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let app = App::new();
 
     event_loop.run_app(app)?;
     Ok(())

@@ -1,16 +1,16 @@
-use winit::event_loop::{ActiveEventLoop};
-use winit::window::{Window, WindowAttributes};
-use winit::event::WindowEvent;
-use winit::application::ApplicationHandler;
 use pixels::{Pixels, SurfaceTexture};
+use winit::application::ApplicationHandler;
+use winit::event::{ElementState, WindowEvent};
+use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::Key;
+use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
+use crate::line::Line;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-
-#[derive(Default)]
 pub struct App {
     window: Option<Box<dyn Window>>,
     pixels: Option<Pixels<'static>>,
@@ -22,15 +22,22 @@ impl App {
         Self {
             window: None,
             pixels: None,
-            framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize)
+            framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
+        }
+    }
+
+    pub fn draw_line(&mut self, line: Line) {
+        let colour = [0, 255, 0, 255];
+        let pixels = line.get_intermediary_pixels();
+        for (x, y) in pixels {
+            self.framebuffer.set_pixel(x, y, colour);
         }
     }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let attrs = WindowAttributes::default()
-            .with_title("rust-renderer");
+        let attrs = WindowAttributes::default().with_title("rust-renderer");
 
         let window = event_loop.create_window(attrs).unwrap();
 
@@ -38,7 +45,7 @@ impl ApplicationHandler for App {
         // extend lifetime
         let pixels = unsafe {
             std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
-                Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
+                Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap(),
             )
         };
 
@@ -54,20 +61,32 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-
                 let pixels = self.pixels.as_mut().unwrap();
-                let frame = pixels.frame_mut();
-
-                for pixel in frame.chunks_exact_mut(4) {
-                    pixel.copy_from_slice(&[255, 0, 0, 255]);
-                }
+                pixels.frame_mut().copy_from_slice(&self.framebuffer.pixels);
 
                 pixels.render().unwrap();
+                self.window.as_ref().unwrap().request_redraw();
+            }
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
+                if key_event.state == ElementState::Pressed {
+                    match &key_event.logical_key {
+                        Key::Character(ch) if ch == "c" => {
+                            self.framebuffer.clear([0, 0, 0, 255]);
+                        }
+                        Key::Character(ch) if ch == "d" => {
+                            let line = Line::new(0, 0, WIDTH as usize, HEIGHT as usize);
+                            self.draw_line(line);
+                        }
+                        _ => {}
+                    }
+                }
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
-            },
-            _ => ()
+            }
+            _ => (),
         }
     }
 
