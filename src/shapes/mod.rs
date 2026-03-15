@@ -1,5 +1,6 @@
 use crate::framebuffer::Framebuffer;
 
+pub mod cube;
 /// Used to declare submodules in the shapes module
 pub mod line;
 pub mod triangle;

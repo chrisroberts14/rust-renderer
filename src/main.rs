@@ -3,6 +3,7 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod framebuffer;
+mod maths;
 mod shapes;
 use app::App;
 

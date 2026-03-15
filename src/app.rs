@@ -7,7 +7,7 @@ use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
 use crate::shapes::Shape;
-use crate::shapes::triangle::Triangle;
+use crate::shapes::cube::Cube;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -39,8 +39,8 @@ impl App {
                 self.framebuffer.clear([0, 0, 0, 255]);
             }
             Key::Character(ch) if ch == "d" => {
-                let triangle = Triangle::new((0, 0), (100, 100), (100, 200));
-                triangle.draw(&mut self.framebuffer);
+                let cube = Cube::new(1.0);
+                cube.draw(&mut self.framebuffer);
             }
             _ => {}
         }
