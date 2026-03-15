@@ -1,4 +1,5 @@
 use crate::maths::vec2::Vec2;
+use crate::maths::vec4::Vec4;
 use std::ops::Add;
 use std::ops::Div;
 use std::ops::Mul;
@@ -87,6 +88,15 @@ impl Vec3 {
             x: self.x * cos - self.y * sin,
             y: self.x * sin + self.y * cos,
             z: self.z,
+        }
+    }
+
+    pub fn to_vec4(self) -> Vec4 {
+        Vec4 {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            w: 1.0,
         }
     }
 }

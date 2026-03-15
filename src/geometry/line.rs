@@ -1,4 +1,4 @@
-use crate::{framebuffer::Framebuffer, maths::vec2::Vec2, shapes::Shape};
+use crate::{framebuffer::Framebuffer, maths::vec2::Vec2};
 
 pub struct Line {
     pub v0: Vec2,
@@ -40,10 +40,8 @@ impl Line {
         }
         pixels
     }
-}
 
-impl Shape for Line {
-    fn draw(&self, framebuffer: &mut Framebuffer) {
+    pub fn draw(&self, framebuffer: &mut Framebuffer) {
         let colour = [0, 255, 0, 255];
         let pixels = self.get_intermediary_pixels();
         for (x, y) in pixels {

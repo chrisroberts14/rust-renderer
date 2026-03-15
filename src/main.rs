@@ -3,8 +3,9 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod framebuffer;
+mod geometry;
 mod maths;
-mod shapes;
+mod renderer;
 use app::App;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

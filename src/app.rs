@@ -6,8 +6,10 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
-use crate::shapes::Shape;
-use crate::shapes::cube::Cube;
+use crate::geometry::cube::Cube;
+use crate::geometry::object::Object;
+use crate::geometry::transform::Transform;
+use crate::renderer::Renderer;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -16,10 +18,7 @@ pub struct App {
     window: Option<Box<dyn Window>>,
     pixels: Option<Pixels<'static>>,
     framebuffer: Framebuffer,
-    test_cube: Option<Cube>,
-    angle_x: f32,
-    angle_y: f32,
-    angle_z: f32,
+    scene: Vec<Object>,
 }
 
 impl App {
@@ -28,10 +27,10 @@ impl App {
             window: None,
             pixels: None,
             framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
-            test_cube: None,
-            angle_x: 0.0,
-            angle_y: 0.0,
-            angle_z: 0.0,
+            scene: vec![Object {
+                mesh: Cube::mesh(1.0),
+                transform: Transform::new(),
+            }],
         }
     }
 
@@ -46,10 +45,7 @@ impl App {
             Key::Character(ch) if ch == "c" => {
                 self.framebuffer.clear([0, 0, 0, 255]);
             }
-            Key::Character(ch) if ch == "d" => {
-                self.test_cube = Some(Cube::new(1.0));
-                self.test_cube.as_ref().unwrap().draw(&mut self.framebuffer);
-            }
+            Key::Character(ch) if ch == "d" => {}
             _ => {}
         }
     }
@@ -84,12 +80,11 @@ impl ApplicationHandler for App {
                 // Clear the current framebuffer
                 self.framebuffer.clear([0, 0, 0, 255]);
 
-                // Rotate the cube slightly if it exists
-                if let Some(cube) = &self.test_cube {
-                    let rotated = cube.rotated(self.angle_x, self.angle_y, self.angle_z);
-                    Cube::draw_with_vertices(&rotated, &mut self.framebuffer);
-                    self.angle_x += 0.01;
-                    self.angle_y += 0.02;
+                // Render all pixels here
+                for obj in &mut self.scene {
+                    obj.transform.rotation.x += 0.01;
+                    obj.transform.rotation.y += 0.01;
+                    Renderer::draw_object(obj, &mut self.framebuffer);
                 }
 
                 let pixels = self.pixels.as_mut().unwrap();

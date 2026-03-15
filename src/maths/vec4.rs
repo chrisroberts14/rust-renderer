@@ -1,6 +1,8 @@
 use std::ops::Add;
 use std::ops::Sub;
 
+use crate::maths::vec3::Vec3;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vec4 {
     pub x: f32,
@@ -15,13 +17,21 @@ impl Vec4 {
         Self { x, y, z, w }
     }
 
-    pub fn scale(&self, factor: f32) -> Vec4 {
-        Vec4::new(
+    pub fn scale(&self, factor: f32) -> Self {
+        Self::new(
             self.x * factor,
             self.y * factor,
             self.z * factor,
             self.w * factor,
         )
+    }
+
+    pub fn perspective_divide(self) -> Vec3 {
+        Vec3 {
+            x: self.x / self.w,
+            y: self.y / self.w,
+            z: self.z / self.w,
+        }
     }
 }
 

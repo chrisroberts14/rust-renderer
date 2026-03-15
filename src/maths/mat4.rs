@@ -1,0 +1,121 @@
+use std::ops::Mul;
+
+use crate::maths::vec4::Vec4;
+
+#[derive(Copy, Clone, Debug)]
+pub struct Mat4 {
+    pub m: [[f32; 4]; 4],
+}
+
+#[allow(dead_code)]
+impl Mat4 {
+    pub fn identity() -> Self {
+        Self {
+            m: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    pub fn translation(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            m: [
+                [1.0, 0.0, 0.0, x],
+                [0.0, 1.0, 0.0, y],
+                [0.0, 0.0, 1.0, z],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    pub fn scale(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            m: [
+                [x, 0.0, 0.0, 0.0],
+                [0.0, y, 0.0, 0.0],
+                [0.0, 0.0, z, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    pub fn rotation_x(angle: f32) -> Self {
+        let c = angle.cos();
+        let s = angle.sin();
+
+        Self {
+            m: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, c, -s, 0.0],
+                [0.0, s, c, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    pub fn rotation_y(angle: f32) -> Self {
+        let c = angle.cos();
+        let s = angle.sin();
+
+        Self {
+            m: [
+                [c, 0.0, s, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [-s, 0.0, c, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    pub fn rotation_z(angle: f32) -> Self {
+        let c = angle.cos();
+        let s = angle.sin();
+
+        Self {
+            m: [
+                [c, -s, 0.0, 0.0],
+                [s, c, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
+    }
+}
+
+impl Mul<Mat4> for Mat4 {
+    type Output = Mat4;
+
+    fn mul(self, rhs: Mat4) -> Mat4 {
+        let mut result = [[0.0; 4]; 4];
+
+        for (row_index, row) in self.m.iter().enumerate() {
+            for (col_index, _) in row.iter().enumerate() {
+                result[row_index][col_index] = self.m[row_index][0] * rhs.m[0][col_index]
+                    + self.m[row_index][1] * rhs.m[1][col_index]
+                    + self.m[row_index][2] * rhs.m[2][col_index]
+                    + self.m[row_index][3] * rhs.m[3][col_index];
+            }
+        }
+
+        Mat4 { m: result }
+    }
+}
+
+impl Mul<Vec4> for Mat4 {
+    type Output = Vec4;
+
+    fn mul(self, v: Vec4) -> Vec4 {
+        Vec4 {
+            x: self.m[0][0] * v.x + self.m[0][1] * v.y + self.m[0][2] * v.z + self.m[0][3] * v.w,
+
+            y: self.m[1][0] * v.x + self.m[1][1] * v.y + self.m[1][2] * v.z + self.m[1][3] * v.w,
+
+            z: self.m[2][0] * v.x + self.m[2][1] * v.y + self.m[2][2] * v.z + self.m[2][3] * v.w,
+
+            w: self.m[3][0] * v.x + self.m[3][1] * v.y + self.m[3][2] * v.z + self.m[3][3] * v.w,
+        }
+    }
+}
