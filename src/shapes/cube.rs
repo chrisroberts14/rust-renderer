@@ -56,20 +56,23 @@ impl Cube {
         }
         new_vertices
     }
+
+    pub fn draw_with_vertices(vertices: &[Vec3; 8], framebuffer: &mut Framebuffer) {
+        for (start, end) in CUBE_EDGES.iter() {
+            let p0 = vertices[*start].project_to_2d(framebuffer.width, framebuffer.height);
+            let p1 = vertices[*end].project_to_2d(framebuffer.width, framebuffer.height);
+
+            let line = Line::new(p0, p1);
+            line.draw(framebuffer);
+        }
+    }
 }
 
 impl Shape for Cube {
     fn draw(&self, framebuffer: &mut Framebuffer) {
-        // Example rotation angles (radians)
-        let rot_x = 0.5; // rotate 0.5 rad around X
-        let rot_y = 0.3; // rotate 0.3 rad around Y
-        let rot_z = 0.0; // no rotation around Z
-
-        let rotated_vertices = self.rotated(rot_x, rot_y, rot_z);
-
         for (start, end) in CUBE_EDGES.iter() {
-            let p0 = rotated_vertices[*start].project_to_2d(framebuffer.width, framebuffer.height);
-            let p1 = rotated_vertices[*end].project_to_2d(framebuffer.width, framebuffer.height);
+            let p0 = self.vertices[*start].project_to_2d(framebuffer.width, framebuffer.height);
+            let p1 = self.vertices[*end].project_to_2d(framebuffer.width, framebuffer.height);
             let line = Line::new(p0, p1);
             line.draw(framebuffer);
         }

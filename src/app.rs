@@ -16,6 +16,10 @@ pub struct App {
     window: Option<Box<dyn Window>>,
     pixels: Option<Pixels<'static>>,
     framebuffer: Framebuffer,
+    test_cube: Option<Cube>,
+    angle_x: f32,
+    angle_y: f32,
+    angle_z: f32,
 }
 
 impl App {
@@ -24,6 +28,10 @@ impl App {
             window: None,
             pixels: None,
             framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
+            test_cube: None,
+            angle_x: 0.0,
+            angle_y: 0.0,
+            angle_z: 0.0,
         }
     }
 
@@ -39,8 +47,8 @@ impl App {
                 self.framebuffer.clear([0, 0, 0, 255]);
             }
             Key::Character(ch) if ch == "d" => {
-                let cube = Cube::new(1.0);
-                cube.draw(&mut self.framebuffer);
+                self.test_cube = Some(Cube::new(1.0));
+                self.test_cube.as_ref().unwrap().draw(&mut self.framebuffer);
             }
             _ => {}
         }
@@ -73,6 +81,17 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
+                // Clear the current framebuffer
+                self.framebuffer.clear([0, 0, 0, 255]);
+
+                // Rotate the cube slightly if it exists
+                if let Some(cube) = &self.test_cube {
+                    let rotated = cube.rotated(self.angle_x, self.angle_y, self.angle_z);
+                    Cube::draw_with_vertices(&rotated, &mut self.framebuffer);
+                    self.angle_x += 0.01;
+                    self.angle_y += 0.02;
+                }
+
                 let pixels = self.pixels.as_mut().unwrap();
                 pixels.frame_mut().copy_from_slice(&self.framebuffer.pixels);
 
