@@ -1,6 +1,6 @@
 use pixels::{Pixels, SurfaceTexture};
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, WindowEvent};
+use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
@@ -31,6 +31,25 @@ impl App {
         let pixels = line.get_intermediary_pixels();
         for (x, y) in pixels {
             self.framebuffer.set_pixel(x, y, colour);
+        }
+    }
+
+    /// Handle keyboard entries
+    /// This mainly exists as a helper to prevent the window_event function
+    /// from becoming too large
+    fn handle_keyboard(&mut self, key_event: &KeyEvent) {
+        if key_event.state != ElementState::Pressed {
+            return;
+        }
+        match &key_event.logical_key {
+            Key::Character(ch) if ch == "c" => {
+                self.framebuffer.clear([0, 0, 0, 255]);
+            }
+            Key::Character(ch) if ch == "d" => {
+                let line = Line::new(0, 0, WIDTH as usize, HEIGHT as usize);
+                self.draw_line(line);
+            }
+            _ => {}
         }
     }
 }
@@ -70,18 +89,7 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                if key_event.state == ElementState::Pressed {
-                    match &key_event.logical_key {
-                        Key::Character(ch) if ch == "c" => {
-                            self.framebuffer.clear([0, 0, 0, 255]);
-                        }
-                        Key::Character(ch) if ch == "d" => {
-                            let line = Line::new(0, 0, WIDTH as usize, HEIGHT as usize);
-                            self.draw_line(line);
-                        }
-                        _ => {}
-                    }
-                }
+                self.handle_keyboard(&key_event);
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
