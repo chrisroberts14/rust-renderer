@@ -1,5 +1,8 @@
 use crate::maths::vec2::Vec2;
 use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Neg;
 use std::ops::Sub;
 
 #[derive(Copy, Clone, Debug)]
@@ -108,6 +111,42 @@ impl Add for Vec3 {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
+        }
+    }
+}
+
+impl Mul<f32> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, factor: f32) -> Vec3 {
+        Vec3 {
+            x: self.x * factor,
+            y: self.y * factor,
+            z: self.z * factor,
+        }
+    }
+}
+
+impl Div<f32> for Vec3 {
+    type Output = Vec3;
+
+    fn div(self, factor: f32) -> Vec3 {
+        Vec3 {
+            x: self.x / factor,
+            y: self.y / factor,
+            z: self.z / factor,
+        }
+    }
+}
+
+impl Neg for Vec3 {
+    type Output = Vec3;
+
+    fn neg(self) -> Vec3 {
+        Vec3 {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
         }
     }
 }
