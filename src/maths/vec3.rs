@@ -15,8 +15,37 @@ impl Vec3 {
         Self { x, y, z }
     }
 
-    pub fn scale(&self, factor: f32) -> Self {
-        Self::new(self.x * factor, self.y * factor, self.z * factor)
+    pub fn scale(&self, factor: f32) -> Vec3 {
+        Vec3::new(self.x * factor, self.y * factor, self.z * factor)
+    }
+
+    pub fn dot(&self, other: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x * other.x,
+            y: self.y * other.y,
+            z: self.z * other.z,
+        }
+    }
+
+    pub fn cross(&self, other: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+        }
+    }
+
+    pub fn length(&self) -> f32 {
+        f32::sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+    }
+
+    pub fn normalise(&self) -> Vec3 {
+        let len = self.length();
+        Vec3 {
+            x: self.x / len,
+            y: self.y / len,
+            z: self.z / len,
+        }
     }
 
     pub fn project_to_2d(&self, width: usize, height: usize) -> Vec2 {
@@ -26,10 +55,10 @@ impl Vec3 {
     }
 
     // Rotate around X axis
-    pub fn rotate_x(&self, angle_rad: f32) -> Self {
+    pub fn rotate_x(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Self {
+        Vec3 {
             x: self.x,
             y: self.y * cos - self.z * sin,
             z: self.y * sin + self.z * cos,
@@ -37,10 +66,10 @@ impl Vec3 {
     }
 
     // Rotate around Y axis
-    pub fn rotate_y(&self, angle_rad: f32) -> Self {
+    pub fn rotate_y(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Self {
+        Vec3 {
             x: self.x * cos + self.z * sin,
             y: self.y,
             z: -self.x * sin + self.z * cos,
@@ -48,10 +77,10 @@ impl Vec3 {
     }
 
     // Rotate around Z axis
-    pub fn rotate_z(&self, angle_rad: f32) -> Self {
+    pub fn rotate_z(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
-        Self {
+        Vec3 {
             x: self.x * cos - self.y * sin,
             y: self.x * sin + self.y * cos,
             z: self.z,

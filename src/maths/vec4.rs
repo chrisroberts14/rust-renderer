@@ -15,8 +15,8 @@ impl Vec4 {
         Self { x, y, z, w }
     }
 
-    pub fn scale(&self, factor: f32) -> Self {
-        Self::new(
+    pub fn scale(&self, factor: f32) -> Vec4 {
+        Vec4::new(
             self.x * factor,
             self.y * factor,
             self.z * factor,
