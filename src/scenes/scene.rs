@@ -22,7 +22,9 @@ impl Scene {
     pub fn render_objects(&mut self, framebuffer: &mut Framebuffer) {
         for object in &mut self.objects {
             object.transform.rotation.x += 0.01;
+            object.transform.rotation.x %= 2.0 * std::f32::consts::PI;
             object.transform.rotation.y += 0.01;
+            object.transform.rotation.y %= 2.0 * std::f32::consts::PI;
             Renderer::draw_object(object, &self.camera, framebuffer);
         }
     }
