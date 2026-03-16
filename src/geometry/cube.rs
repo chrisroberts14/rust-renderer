@@ -43,6 +43,17 @@ impl Cube {
             (3, 7, 6),
         ];
 
-        Mesh::new(vertices, faces)
+        let red = [220, 60, 60, 255];
+        let green = [60, 180, 60, 255];
+        let blue = [60, 60, 220, 255];
+        let yellow = [220, 200, 50, 255];
+        let cyan = [50, 200, 200, 255];
+        let white = [220, 220, 220, 255];
+
+        let face_colors = vec![
+            red, red, green, green, blue, blue, yellow, yellow, cyan, cyan, white, white,
+        ];
+
+        Mesh::new(vertices, faces, face_colors)
     }
 }

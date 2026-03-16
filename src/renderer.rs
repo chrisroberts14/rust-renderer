@@ -13,7 +13,7 @@ impl Renderer {
         let view_matrix = camera.view_matrix();
         let projection_matrix = camera.projection_matrix();
 
-        for (i0, i1, i2) in &object.mesh.faces {
+        for (face_idx, (i0, i1, i2)) in object.mesh.faces.iter().enumerate() {
             let v0 = object.mesh.vertices[*i0];
             let v1 = object.mesh.vertices[*i1];
             let v2 = object.mesh.vertices[*i2];
@@ -54,7 +54,11 @@ impl Renderer {
                 for x in min_x..=max_x {
                     let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
                     if screen_triangle.contains_point(p) {
-                        framebuffer.set_pixel(x as usize, y as usize, [255, 0, 0, 255]);
+                        framebuffer.set_pixel(
+                            x as usize,
+                            y as usize,
+                            object.mesh.color_of(face_idx),
+                        );
                     }
                 }
             }
