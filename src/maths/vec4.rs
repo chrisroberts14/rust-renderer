@@ -51,7 +51,7 @@ impl Add for Vec4 {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
-            w: self.w,
+            w: self.w + other.w,
         }
     }
 }
