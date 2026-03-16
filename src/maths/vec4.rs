@@ -1,6 +1,6 @@
 use std::ops::Add;
-use std::ops::Sub;
 use std::ops::Mul;
+use std::ops::Sub;
 
 use crate::maths::vec3::Vec3;
 
@@ -37,8 +37,8 @@ impl Sub for Vec4 {
         Vec4 {
             x: self.x - other.x,
             y: self.y - other.y,
-            z: self.z + other.z,
-            w: self.w,
+            z: self.z - other.z,
+            w: self.w - other.w,
         }
     }
 }
@@ -64,7 +64,7 @@ impl Mul<f32> for Vec4 {
             x: self.x * scalar,
             y: self.y * scalar,
             z: self.z * scalar,
-            w: self.w,
+            w: self.w * scalar,
         }
     }
 }

@@ -31,8 +31,8 @@ impl Camera {
         let pz = -self.position.z;
 
         let rot_x = Mat4::rotation_x(rx);
-        let rot_y = Mat4::rotation_x(ry);
-        let rot_z = Mat4::rotation_x(rz);
+        let rot_y = Mat4::rotation_y(ry);
+        let rot_z = Mat4::rotation_z(rz);
 
         let trans = Mat4::translation(px, py, pz);
 

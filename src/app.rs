@@ -9,7 +9,6 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::cube::Cube;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
-use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
 const WIDTH: u32 = 800;

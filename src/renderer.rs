@@ -23,9 +23,7 @@ impl Renderer {
 
             // Transform to clip space
             let mut clip0 = projection_matrix * v0_cam;
-            let mut clip0_test = projection_matrix * v0_cam;
             let mut clip1 = projection_matrix * v1_cam;
-            let mut clip1_test = projection_matrix * v1_cam;
 
             // --- FULL 6-PLANE CLIPPING ---
             if !Self::clip_line(&mut clip0, &mut clip1) {
@@ -42,28 +40,12 @@ impl Renderer {
                 Err(_) => continue,
             };
 
-             let ndc0_orig = match clip0_test.perspective_divide() {
-                Ok(ndc) => ndc,
-                Err(_) => continue,
-            };
-            let ndc1_orig = match clip1_test.perspective_divide() {
-                Ok(ndc) => ndc,
-                Err(_) => continue,
-            };
-
             // --- NDC TO SCREEN ---
-            let p0_clipped = ndc0.project_to_2d(framebuffer.width, framebuffer.height);
-            let p1_clipped = ndc1.project_to_2d(framebuffer.width, framebuffer.height);
-
-            let p0_orig = ndc0_orig.project_to_2d(framebuffer.width, framebuffer.height);
-            let p1_orig = ndc1_orig.project_to_2d(framebuffer.width, framebuffer.height);
+            let p0 = ndc0.project_to_2d(framebuffer.width, framebuffer.height);
+            let p1 = ndc1.project_to_2d(framebuffer.width, framebuffer.height);
 
             // Draw the line
-            //Line::new(p0, p1).draw(framebuffer, [0, 255, 0, 255]);
-            // Before clipping: white
-            Line::new(p0_orig, p1_orig).draw(framebuffer, [255, 0, 0, 255]);
-            // After clipping: red
-            Line::new(p0_clipped, p1_clipped).draw(framebuffer, [0, 255, 0, 255]);
+            Line::new(p0, p1).draw(framebuffer, [0, 255, 0, 255]);
         }
     }
 
@@ -72,12 +54,12 @@ impl Renderer {
     fn clip_line(v0: &mut Vec4, v1: &mut Vec4) -> bool {
         // Planes: left, right, bottom, top, near, far
         let planes = [
-            |v: &Vec4| v.x + v.w,   // left
-            |v: &Vec4| v.w - v.x,   // right
-            |v: &Vec4| v.y + v.w,   // bottom
-            |v: &Vec4| v.w - v.y,   // top
-            |v: &Vec4| v.z,         // near (z >= 0)
-            |v: &Vec4| v.w - v.z,   // far (z <= w)
+            |v: &Vec4| v.x + v.w, // left
+            |v: &Vec4| v.w - v.x, // right
+            |v: &Vec4| v.y + v.w, // bottom
+            |v: &Vec4| v.w - v.y, // top
+            |v: &Vec4| v.z + v.w, // near (z >= -w)
+            |v: &Vec4| v.w - v.z, // far (z <= w)
         ];
 
         for plane in planes {
