@@ -99,19 +99,26 @@ impl Renderer {
             };
 
             let base_color = object.mesh.color_of(face_idx);
+            let r = base_color[0] as f32;
+            let g = base_color[1] as f32;
+            let b = base_color[2] as f32;
 
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
-                    let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-
-                    if let Some((w0, w1, w2)) = screen_triangle.contains_point(p) {
+                    if let Some((w0, w1, w2)) = screen_triangle.contains_point(x as f32 + 0.5, y as f32 +0.5) {
                         let depth = w0 * z0 + w1 * z1 + w2 * z2;
 
-                        if framebuffer.test_and_set_depth(x as usize, y as usize, depth) {
+                        let ux = x as usize;
+                        let uy = y as usize;
+
+                        if framebuffer.test_and_set_depth(ux, uy, depth) {
 
                             // Interpolate normal
-                            let normal = (n0_world * w0 + n1_world * w1 + n2_world * w2).normalise();
+                            //let normal = (n0_world * w0 + n1_world * w1 + n2_world * w2).normalise();
 
+                            let normal = n0_world * w0 + n1_world * w1 + n2_world * w2;
+                            //let diffuse = light_dir.dot(normal).max(0.0);
+                            
                             let diffuse_intensity = match lighting {
                                 Some((distance_intensity, light_dir)) => {
                                     let diffuse = light_dir.dot(normal).max(0.0);
@@ -121,13 +128,13 @@ impl Renderer {
                             };
 
                             let shaded_color = [
-                                (base_color[0] as f32 * diffuse_intensity) as u8,
-                                (base_color[1] as f32 * diffuse_intensity) as u8,
-                                (base_color[2] as f32 * diffuse_intensity) as u8,
+                                (r * diffuse_intensity) as u8,
+                                (g * diffuse_intensity) as u8,
+                                (b * diffuse_intensity) as u8,
                                 base_color[3],
                             ];
 
-                            framebuffer.set_pixel(x as usize, y as usize, shaded_color);
+                            framebuffer.set_pixel(ux, uy, shaded_color);
                         }
                     }
                 }

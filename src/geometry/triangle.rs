@@ -86,36 +86,29 @@ impl Triangle {
         (Vec2::new(min_x, min_y), Vec2::new(max_x, max_y))
     }
 
-    pub fn contains_point(&self, p: Vec2) -> Option<(f32, f32, f32)> {
-        let v0v1 = Vec3 {
-            x: self.v1.x - self.v0.x,
-            y: self.v1.y - self.v0.y,
-            z: self.v1.z - self.v0.z,
-        };
-        let v0v2 = Vec3 {
-            x: self.v2.x - self.v0.x,
-            y: self.v2.y - self.v0.y,
-            z: self.v2.z - self.v0.z,
-        };
-        let v0p = Vec3 {
-            x: p.x - self.v0.x,
-            y: p.y - self.v0.y,
-            z: 0.0,
-        };
+    pub fn contains_point(&self, px: f32, py: f32) -> Option<(f32, f32, f32)> {
+        let v0x = self.v2.x - self.v0.x;
+        let v0y = self.v2.y - self.v0.y;
 
-        let dot00 = v0v2.dot(v0v2);
-        let dot01 = v0v2.dot(v0v1);
-        let dot02 = v0v2.dot(v0p);
-        let dot11 = v0v1.dot(v0v1);
-        let dot12 = v0v1.dot(v0p);
+        let v1x = self.v1.x - self.v0.x;
+        let v1y = self.v1.y - self.v0.y;
+
+        let v2x = px - self.v0.x;
+        let v2y = py - self.v0.y;
+
+        let dot00 = v0x * v0x + v0y * v0y;
+        let dot01 = v0x * v1x + v0y * v1y;
+        let dot02 = v0x * v2x + v0y * v2y;
+        let dot11 = v1x * v1x + v1y * v1y;
+        let dot12 = v1x * v2x + v1y * v2y;
 
         let inv_denom = 1.0 / (dot00 * dot11 - dot01 * dot01);
+
         let u = (dot11 * dot02 - dot01 * dot12) * inv_denom;
         let v = (dot00 * dot12 - dot01 * dot02) * inv_denom;
 
-        if u >= 0.0 && v >= 0.0 && (u + v) < 1.0 {
-            let w = 1.0 - u - v;
-            Some((w, v, u))
+        if u >= 0.0 && v >= 0.0 && u + v < 1.0 {
+            Some((1.0 - u - v, v, u))
         } else {
             None
         }
