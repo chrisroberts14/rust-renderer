@@ -21,13 +21,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let mut scene = Scene::new(app::HEIGHT as f32, app::WIDTH as f32);
-    let mesh = ObjLoader::load(Path::new("teapot.obj"), [255, 255, 255, 255])?;
+    let mesh = ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?;
     scene.add_object(Object::new(mesh, Transform::default()));
 
     scene.light = Some(PointLight::new(
         Vec3::new(0.0, 0.0, 5.0),
         [255.0, 255.0, 255.0],
-        5.0,
+        15.0,
     ));
 
     let app = App::new(scene);
