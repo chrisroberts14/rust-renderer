@@ -2,12 +2,12 @@ use winit::event_loop::ControlFlow;
 use winit::event_loop::EventLoop;
 
 mod app;
+mod fps;
 mod framebuffer;
 mod geometry;
 mod maths;
 mod renderer;
 mod scenes;
-mod fps;
 use crate::geometry::obj_loader::ObjLoader;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;

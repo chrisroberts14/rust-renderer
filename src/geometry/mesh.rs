@@ -5,7 +5,7 @@ pub struct Mesh {
     pub vertices: Vec<Vec3>,
     pub faces: Vec<(usize, usize, usize)>,
     pub face_colors: Vec<[u8; 4]>,
-    pub normals: Vec<Vec3>
+    pub normals: Vec<Vec3>,
 }
 
 impl Mesh {
@@ -19,7 +19,7 @@ impl Mesh {
             vertices,
             faces,
             face_colors,
-            normals
+            normals,
         }
     }
 
@@ -34,7 +34,6 @@ impl Mesh {
         vertices: &Vec<Vec3>,
         faces: &Vec<(usize, usize, usize)>,
     ) -> Vec<Vec3> {
-
         let mut normals = vec![Vec3::new(0.0, 0.0, 0.0); vertices.len()];
 
         for (i0, i1, i2) in faces {

@@ -22,10 +22,14 @@ impl Renderer {
         let projection = camera.projection_matrix();
 
         let model_view = view * model;
-
         let normal_matrix = model.inverse().unwrap().transpose();
 
-        let vertices_world: Vec<Vec3> = object.mesh.vertices
+        let width = framebuffer.width as i32;
+        let height = framebuffer.height as i32;
+
+        let vertices_world: Vec<Vec3> = object
+            .mesh
+            .vertices
             .iter()
             .map(|v| (model * v.to_vec4()).to_vec3())
             .collect();
@@ -41,7 +45,7 @@ impl Renderer {
             .mesh
             .normals
             .iter()
-            .map(|n| (normal_matrix * n.to_vec4()).to_vec3().normalise())
+            .map(|n| (normal_matrix * n.to_vec4()).to_vec3())
             .collect();
 
         for (face_idx, (i0, i1, i2)) in object.mesh.faces.iter().enumerate() {
@@ -53,50 +57,45 @@ impl Renderer {
             let v1_world = vertices_world[*i1];
             let v2_world = vertices_world[*i2];
 
-            let n0_world = normals_world[*i0];
-            let n1_world = normals_world[*i1];
-            let n2_world = normals_world[*i2];
+            let n0 = normals_world[*i0];
+            let n1 = normals_world[*i1];
+            let n2 = normals_world[*i2];
 
+            // Backface culling
             let e1 = v1 - v0;
             let e2 = v2 - v0;
-
             let normal = e1.cross(e2);
 
             if normal.dot(-v0) <= 0.0 {
                 continue;
             }
 
-            // Project to screen space
-            let ((p0, z0), (p1, z1), (p2, z2)) = Triangle::new(v0, v1, v2).project(
-                projection,
-                framebuffer.width as f32,
-                framebuffer.height as f32,
-            );
+            let ((p0, z0), (p1, z1), (p2, z2)) =
+                Triangle::new(v0, v1, v2).project(projection, width as f32, height as f32);
 
-            // Build a screen-space triangle for rasterization
-            let screen_triangle = Triangle::new(
-                Vec3::new(p0.x, p0.y, 0.0),
-                Vec3::new(p1.x, p1.y, 0.0),
-                Vec3::new(p2.x, p2.y, 0.0),
-            );
+            let x0 = p0.x;
+            let y0 = p0.y;
+            let x1 = p1.x;
+            let y1 = p1.y;
+            let x2 = p2.x;
+            let y2 = p2.y;
 
-            // Rasterize
-            let (min, max) = screen_triangle.bounding_box();
-            let min_x = (min.x as i32).max(0);
-            let max_x = (max.x as i32).min(framebuffer.width as i32 - 1);
-            let min_y = (min.y as i32).max(0);
-            let max_y = (max.y as i32).min(framebuffer.height as i32 - 1);
+            let min_x = x0.min(x1).min(x2).floor().max(0.0) as i32;
+            let max_x = x0.max(x1).max(x2).ceil().min(width as f32 - 1.0) as i32;
+            let min_y = y0.min(y1).min(y2).floor().max(0.0) as i32;
+            let max_y = y0.max(y1).max(y2).ceil().min(height as f32 - 1.0) as i32;
 
-            let lighting = match light_source {
-                Some(light) => {
-                    let centre = (v0_world + v1_world + v2_world) / 3.0;
-                    let distance_intensity = light.intensity_at(centre);
-                    let light_dir = light.direction_to(centre);
+            // Edge function constants
+            let area = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
+            if area == 0.0 {
+                continue;
+            }
+            let inv_area = 1.0 / area;
 
-                    Some((distance_intensity, light_dir))
-                }
-                None => None,
-            };
+            let lighting = light_source.as_ref().map(|light| {
+                let centre = (v0_world + v1_world + v2_world) / 3.0;
+                (light.intensity_at(centre), light.direction_to(centre))
+            });
 
             let base_color = object.mesh.color_of(face_idx);
             let r = base_color[0] as f32;
@@ -105,73 +104,44 @@ impl Renderer {
 
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
-                    if let Some((w0, w1, w2)) = screen_triangle.contains_point(x as f32 + 0.5, y as f32 +0.5) {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+
+                    let w0 = ((x1 - px) * (y2 - py) - (y1 - py) * (x2 - px)) * inv_area;
+                    let w1 = ((x2 - px) * (y0 - py) - (y2 - py) * (x0 - px)) * inv_area;
+                    let w2 = 1.0 - w0 - w1;
+
+                    if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
                         let depth = w0 * z0 + w1 * z1 + w2 * z2;
 
                         let ux = x as usize;
                         let uy = y as usize;
 
                         if framebuffer.test_and_set_depth(ux, uy, depth) {
+                            let normal = n0 * w0 + n1 * w1 + n2 * w2;
 
-                            // Interpolate normal
-                            //let normal = (n0_world * w0 + n1_world * w1 + n2_world * w2).normalise();
+                            let mut diffuse_intensity = AMBIENT;
 
-                            let normal = n0_world * w0 + n1_world * w1 + n2_world * w2;
-                            //let diffuse = light_dir.dot(normal).max(0.0);
-                            
-                            let diffuse_intensity = match lighting {
-                                Some((distance_intensity, light_dir)) => {
-                                    let diffuse = light_dir.dot(normal).max(0.0);
-                                    AMBIENT + (1.0 - AMBIENT) * diffuse * distance_intensity
-                                }
-                                None => AMBIENT,
-                            };
+                            if let Some((distance_intensity, light_dir)) = lighting {
+                                let diffuse = light_dir.dot(normal).max(0.0);
+                                diffuse_intensity =
+                                    AMBIENT + (1.0 - AMBIENT) * diffuse * distance_intensity;
+                            }
 
-                            let shaded_color = [
-                                (r * diffuse_intensity) as u8,
-                                (g * diffuse_intensity) as u8,
-                                (b * diffuse_intensity) as u8,
-                                base_color[3],
-                            ];
-
-                            framebuffer.set_pixel(ux, uy, shaded_color);
+                            framebuffer.set_pixel(
+                                ux,
+                                uy,
+                                [
+                                    (r * diffuse_intensity) as u8,
+                                    (g * diffuse_intensity) as u8,
+                                    (b * diffuse_intensity) as u8,
+                                    base_color[3],
+                                ],
+                            );
                         }
                     }
                 }
             }
-
         }
-
-        /*if let Some(light_source) = light_source {
-            // For debugging: draw light source as a small white square
-            let light_screen_pos = (projection_matrix
-                * view_matrix
-                * Vec3::new(
-                    light_source.position.x,
-                    light_source.position.y,
-                    light_source.position.z,
-                )
-                .to_vec4())
-            .to_vec3();
-            let light_screen_x = ((light_screen_pos.x / light_screen_pos.z + 1.0)
-                * 0.5
-                * framebuffer.width as f32) as i32;
-            let light_screen_y = ((1.0 - light_screen_pos.y / light_screen_pos.z)
-                * 0.5
-                * framebuffer.height as f32) as i32;
-            for dy in -2..=2 {
-                for dx in -2..=2 {
-                    let lx = light_screen_x + dx;
-                    let ly = light_screen_y + dy;
-                    if lx >= 0
-                        && lx < framebuffer.width as i32
-                        && ly >= 0
-                        && ly < framebuffer.height as i32
-                    {
-                        framebuffer.set_pixel(lx as usize, ly as usize, [255, 255, 255, 255]);
-                    }
-                }
-            }
-        }*/
     }
 }

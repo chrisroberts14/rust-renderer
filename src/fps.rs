@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 pub struct FpsCounter {
     last_time: Instant,
     frame_count: u32,
-    pub fps: u32
+    pub fps: u32,
 }
 
 impl FpsCounter {
