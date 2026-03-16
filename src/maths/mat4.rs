@@ -83,6 +83,20 @@ impl Mat4 {
             ],
         }
     }
+
+    pub fn perspective(fov: f32, aspect: f32, near: f32, far: f32) -> Self {
+        let f = 1.0 / (fov * 0.5).tan();
+        let nf = 1.0 / (near - far);
+
+        Self {
+            m: [
+                [f / aspect, 0.0, 0.0, 0.0],
+                [0.0, f, 0.0, 0.0],
+                [0.0, 0.0, (far + near) * nf, (2.0 * far * near) * nf],
+                [0.0, 0.0, -1.0, 0.0],
+            ],
+        }
+    }
 }
 
 impl Mul<Mat4> for Mat4 {

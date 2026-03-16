@@ -6,7 +6,7 @@ mod framebuffer;
 mod geometry;
 mod maths;
 mod renderer;
-mod scene;
+mod scenes;
 use app::App;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

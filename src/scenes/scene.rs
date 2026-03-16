@@ -1,13 +1,17 @@
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
 
-pub struct SceneObjects {
+use crate::scenes::camera::Camera;
+
+pub struct Scene {
     pub objects: Vec<Object>,
+    pub camera: Camera,
 }
 
-impl SceneObjects {
-    pub fn new() -> Self {
+impl Scene {
+    pub fn new(height: f32, width: f32) -> Self {
         Self {
             objects: Vec::new(),
+            camera: Camera::new(height, width),
         }
     }
 
@@ -19,7 +23,7 @@ impl SceneObjects {
         for object in &mut self.objects {
             object.transform.rotation.x += 0.01;
             object.transform.rotation.y += 0.01;
-            Renderer::draw_object(object, framebuffer);
+            Renderer::draw_object(object, &self.camera, framebuffer);
         }
     }
 }

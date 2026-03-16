@@ -10,13 +10,13 @@ use crate::geometry::cube::Cube;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
-use crate::scene::scene_objects::SceneObjects as Scene;
+use crate::scenes::scene::Scene;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 pub struct App {
-    window: Option<Box<dyn Window>>,
+    window: Option<&'static dyn Window>,
     pixels: Option<Pixels<'static>>,
     framebuffer: Framebuffer,
     scene: Scene,
@@ -24,7 +24,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let mut scene = Scene::new();
+        let mut scene = Scene::new(HEIGHT as f32, WIDTH as f32);
         scene.add_object(Object {
             mesh: Cube::mesh(0.5),
             transform: Transform::new(),
@@ -68,16 +68,15 @@ impl ApplicationHandler for App {
 
         let window = event_loop.create_window(attrs).unwrap();
 
-        let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, window.as_ref());
-        // extend lifetime
-        let pixels = unsafe {
-            std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
-                Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap(),
-            )
-        };
+        // Leak the window to get a 'static reference
+        let window_ref: &'static dyn Window = Box::leak(window);
 
+        let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, window_ref);
+        // extend lifetime
+        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap();
+
+        self.window = Some(window_ref);
         self.pixels = Some(pixels);
-        self.window = Some(window);
     }
 
     fn window_event(
@@ -98,22 +97,6 @@ impl ApplicationHandler for App {
 
                 pixels.render().unwrap();
                 self.window.as_ref().unwrap().request_redraw();
-            }
-            WindowEvent::SurfaceResized(size) => {
-                let width = size.width;
-                let height = size.height;
-
-                let surface_texture =
-                    SurfaceTexture::new(width, height, self.window.as_ref().unwrap());
-                // extend lifetime
-                let pixels = unsafe {
-                    std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
-                        Pixels::new(width, height, surface_texture).unwrap(),
-                    )
-                };
-
-                self.pixels = Some(pixels);
-                self.framebuffer.resize(width as usize, height as usize);
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..

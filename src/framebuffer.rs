@@ -16,12 +16,6 @@ impl Framebuffer {
         }
     }
 
-    pub fn resize(&mut self, new_width: usize, new_height: usize) {
-        self.width = new_width;
-        self.height = new_height;
-        self.pixels.resize(new_width * new_height * 4, 0); // Resize pixel data accordingly
-    }
-
     /// Set a single pixel
     pub fn set_pixel(&mut self, x: usize, y: usize, color: [u8; 4]) {
         if x >= self.width || y >= self.height {
