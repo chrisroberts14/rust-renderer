@@ -3,16 +3,16 @@ use crate::maths::{mat4::Mat4, vec3::Vec3};
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Vec3,
-    fov: f32,
-    aspect_ratio: f32,
-    near: f32,
-    far: f32,
+    pub fov: f32,
+    pub aspect_ratio: f32,
+    pub near: f32,
+    pub far: f32,
 }
 
 impl Camera {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 2.0),
+            position: Vec3::new(0.0, 0.0, 0.4),
             rotation: Vec3::new(0.0, 0.0, 0.0),
             fov: 0.5 * std::f32::consts::PI,
             aspect_ratio: width / height,

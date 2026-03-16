@@ -41,8 +41,7 @@ impl Line {
         pixels
     }
 
-    pub fn draw(&self, framebuffer: &mut Framebuffer) {
-        let colour = [0, 255, 0, 255];
+    pub fn draw(&self, framebuffer: &mut Framebuffer, colour: [u8; 4]) {
         let pixels = self.get_intermediary_pixels();
         for (x, y) in pixels {
             framebuffer.set_pixel(x, y, colour);

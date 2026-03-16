@@ -1,5 +1,6 @@
 use std::ops::Add;
 use std::ops::Sub;
+use std::ops::Mul;
 
 use crate::maths::vec3::Vec3;
 
@@ -17,21 +18,15 @@ impl Vec4 {
         Self { x, y, z, w }
     }
 
-    pub fn scale(&self, factor: f32) -> Self {
-        Self::new(
-            self.x * factor,
-            self.y * factor,
-            self.z * factor,
-            self.w * factor,
-        )
-    }
-
-    pub fn perspective_divide(self) -> Vec3 {
-        Vec3 {
+    pub fn perspective_divide(self) -> Result<Vec3, ()> {
+        if self.w == 0.0 {
+            return Err(());
+        }
+        Ok(Vec3 {
             x: self.x / self.w,
             y: self.y / self.w,
             z: self.z / self.w,
-        }
+        })
     }
 }
 
@@ -43,7 +38,7 @@ impl Sub for Vec4 {
             x: self.x - other.x,
             y: self.y - other.y,
             z: self.z + other.z,
-            w: self.w - other.w,
+            w: self.w,
         }
     }
 }
@@ -56,7 +51,20 @@ impl Add for Vec4 {
             x: self.x + other.x,
             y: self.y + other.y,
             z: self.z + other.z,
-            w: self.w + other.w,
+            w: self.w,
+        }
+    }
+}
+
+impl Mul<f32> for Vec4 {
+    type Output = Vec4;
+
+    fn mul(self, scalar: f32) -> Vec4 {
+        Vec4 {
+            x: self.x * scalar,
+            y: self.y * scalar,
+            z: self.z * scalar,
+            w: self.w,
         }
     }
 }

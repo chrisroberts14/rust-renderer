@@ -29,14 +29,6 @@ impl App {
             mesh: Cube::mesh(0.5),
             transform: Transform::new(),
         });
-        scene.add_object(Object {
-            mesh: Cube::mesh(0.5),
-            transform: Transform {
-                position: Vec3::new(0.5, 0.5, 0.0),
-                rotation: Vec3::new(0.0, 0.0, 0.0),
-                scale: Vec3::new(1.0, 1.0, 1.0),
-            },
-        });
         Self {
             window: None,
             pixels: None,
