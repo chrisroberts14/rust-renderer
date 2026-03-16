@@ -8,6 +8,7 @@ use winit::window::{Window, WindowAttributes};
 use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
+use crate::fps::FpsCounter;
 
 pub(crate) const WIDTH: u32 = 800;
 pub(crate) const HEIGHT: u32 = 600;
@@ -17,6 +18,7 @@ pub struct App {
     pixels: Option<Pixels<'static>>,
     framebuffer: Framebuffer,
     scene: Scene,
+    fps_counter: FpsCounter
 }
 
 impl App {
@@ -26,6 +28,7 @@ impl App {
             pixels: None,
             framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
             scene,
+            fps_counter: FpsCounter::new()
         }
     }
 
@@ -101,6 +104,7 @@ impl ApplicationHandler for App {
                 pixels.frame_mut().copy_from_slice(&self.framebuffer.pixels);
 
                 pixels.render().unwrap();
+                self.fps_counter.tick();
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::KeyboardInput {
