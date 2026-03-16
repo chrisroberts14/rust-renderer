@@ -24,8 +24,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut scene = Scene::new(app::HEIGHT as f32, app::WIDTH as f32);
     let monkey_mesh = ObjLoader::load(Path::new("monkey.obj"), [255, 255, 0, 255])?;
     let teapot_mesh = ObjLoader::load(Path::new("teapot.obj"), [255, 0, 255, 255])?;
-    scene.add_object(Object::new(monkey_mesh, Transform::new()));
-    scene.add_object(Object::new(teapot_mesh, Transform::new()));
+    scene.add_object(Object::new(monkey_mesh, Transform::with_position(Vec3::new(0.0, 2.0, 0.0))));
+    scene.add_object(Object::new(teapot_mesh, Transform::with_position(Vec3::new(0.0, -2.0, 0.0))));
 
     scene.light = Some(PointLight::new(
         Vec3::new(0.0, 0.0, 5.0),
