@@ -7,7 +7,7 @@ pub(crate) struct Triangle {
     v0: Vec3,
     v1: Vec3,
     v2: Vec3,
-    normal: Vec3,
+    pub normal: Vec3,
 }
 
 impl Triangle {
@@ -36,6 +36,14 @@ impl Triangle {
         let new_v1 = (mat * Vec4::from_vec3(self.v1, 1.0)).to_vec3();
         let new_v2 = (mat * Vec4::from_vec3(self.v2, 1.0)).to_vec3();
         Triangle::new(new_v0, new_v1, new_v2)
+    }
+
+    pub fn centre(&self) -> Vec3 {
+        Vec3 {
+            x: (self.v0.x + self.v1.x + self.v2.x) / 3.0,
+            y: (self.v0.y + self.v1.y + self.v2.y) / 3.0,
+            z: (self.v0.z + self.v1.z + self.v2.z) / 3.0,
+        }
     }
 
     pub fn project(&self, mat: Mat4, screen_width: f32, screen_height: f32) -> (Vec2, Vec2, Vec2) {

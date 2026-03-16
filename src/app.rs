@@ -6,14 +6,11 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
 use crate::framebuffer::Framebuffer;
-use crate::geometry::cube::Cube;
-use crate::geometry::object::Object;
-use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
+pub(crate) const WIDTH: u32 = 800;
+pub(crate) const HEIGHT: u32 = 600;
 
 pub struct App {
     window: Option<&'static dyn Window>,
@@ -23,16 +20,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
-        let mut scene = Scene::new(HEIGHT as f32, WIDTH as f32);
-        scene.add_object(Object {
-            mesh: Cube::mesh(1.0),
-            transform: Transform {
-                position: Vec3::new(1.0, 0.5, 0.0),
-                rotation: Vec3::new(0.0, 0.0, 0.0),
-                scale: Vec3::new(1.0, 1.0, 1.0),
-            },
-        });
+    pub fn new(scene: Scene) -> Self {
         Self {
             window: None,
             pixels: None,

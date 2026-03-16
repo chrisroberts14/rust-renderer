@@ -1,10 +1,12 @@
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
 
 use crate::scenes::camera::Camera;
+use crate::scenes::pointlight::PointLight;
 
 pub struct Scene {
     pub objects: Vec<Object>,
     pub camera: Camera,
+    pub light: Option<PointLight>,
 }
 
 impl Scene {
@@ -12,6 +14,7 @@ impl Scene {
         Self {
             objects: Vec::new(),
             camera: Camera::new(width, height),
+            light: None,
         }
     }
 
@@ -25,7 +28,7 @@ impl Scene {
             object.transform.rotation.x %= 2.0 * std::f32::consts::PI;
             object.transform.rotation.y += 0.01;
             object.transform.rotation.y %= 2.0 * std::f32::consts::PI;
-            Renderer::draw_object(object, &self.camera, framebuffer);
+            Renderer::draw_object(object, &self.camera, &self.light, framebuffer);
         }
     }
 }
