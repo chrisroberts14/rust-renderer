@@ -1,8 +1,10 @@
 use crate::geometry::mesh::Mesh;
 use crate::maths::vec3::Vec3;
 
+#[allow(dead_code)]
 pub struct Cube;
 
+#[allow(dead_code)]
 impl Cube {
     pub fn mesh(size: f32) -> Mesh {
         let s = size / 2.0;

@@ -1,5 +1,6 @@
 use crate::maths::vec3::Vec3;
 
+#[derive(Debug)]
 pub struct Mesh {
     pub vertices: Vec<Vec3>,
     pub faces: Vec<(usize, usize, usize)>,
