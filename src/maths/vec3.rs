@@ -53,8 +53,8 @@ impl Vec3 {
     }
 
     pub fn project_to_2d(&self, width: usize, height: usize) -> Vec2 {
-        let x = ((self.x + 1.0) * 0.5 * width as f32) as usize;
-        let y = ((1.0 - (self.y + 1.0) * 0.5) * height as f32) as usize;
+        let x = ((self.x + 1.0) * 0.5 * (width - 1) as f32) as usize;
+        let y = ((1.0 - (self.y + 1.0) * 0.5) * (height - 1) as f32) as usize;
         Vec2::new(x as f32, y as f32)
     }
 

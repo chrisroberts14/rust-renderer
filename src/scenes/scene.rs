@@ -11,7 +11,7 @@ impl Scene {
     pub fn new(height: f32, width: f32) -> Self {
         Self {
             objects: Vec::new(),
-            camera: Camera::new(height, width),
+            camera: Camera::new(width, height),
         }
     }
 
