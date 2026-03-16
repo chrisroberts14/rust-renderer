@@ -28,6 +28,23 @@ impl Vec4 {
             z: self.z / self.w,
         })
     }
+
+    pub fn from_vec3(v: Vec3, w: f32) -> Vec4 {
+        Vec4 {
+            x: v.x,
+            y: v.y,
+            z: v.z,
+            w,
+        }
+    }
+
+    pub fn to_vec3(self) -> Vec3 {
+        Vec3 {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+        }
+    }
 }
 
 impl Sub for Vec4 {

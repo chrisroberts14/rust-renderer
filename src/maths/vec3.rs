@@ -23,12 +23,8 @@ impl Vec3 {
         Vec3::new(self.x * factor, self.y * factor, self.z * factor)
     }
 
-    pub fn dot(&self, other: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.x * other.x,
-            y: self.y * other.y,
-            z: self.z * other.z,
-        }
+    pub fn dot(&self, other: Vec3) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
     }
 
     pub fn cross(&self, other: Vec3) -> Vec3 {
