@@ -88,6 +88,12 @@ impl ApplicationHandler for App {
 
         self.window = Some(window_ref);
         self.pixels = Some(pixels);
+
+        window_ref.request_redraw();
+    }
+
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
+        self.resumed(event_loop);
     }
 
     fn window_event(
@@ -119,9 +125,5 @@ impl ApplicationHandler for App {
             }
             _ => (),
         }
-    }
-
-    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.resumed(event_loop);
     }
 }
