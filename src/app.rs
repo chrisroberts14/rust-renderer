@@ -9,6 +9,7 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::cube::Cube;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
+use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
 const WIDTH: u32 = 800;
@@ -25,8 +26,12 @@ impl App {
     pub fn new() -> Self {
         let mut scene = Scene::new(HEIGHT as f32, WIDTH as f32);
         scene.add_object(Object {
-            mesh: Cube::mesh(0.5),
-            transform: Transform::new(),
+            mesh: Cube::mesh(1.0),
+            transform: Transform {
+                position: Vec3::new(1.0, 0.5, 0.0),
+                rotation: Vec3::new(0.0, 0.0, 0.0),
+                scale: Vec3::new(1.0, 1.0, 1.0),
+            },
         });
         Self {
             window: None,
@@ -47,7 +52,22 @@ impl App {
             Key::Character(ch) if ch == "c" => {
                 self.framebuffer.clear([0, 0, 0, 255]);
             }
-            Key::Character(ch) if ch == "d" => {}
+            Key::Character(ch) if ch == "w" => {
+                // Move the camera forward
+                self.scene.camera.move_camera(Vec3::new(0.0, 0.0, -0.05));
+            }
+            Key::Character(ch) if ch == "s" => {
+                // Move the camera forward
+                self.scene.camera.move_camera(Vec3::new(0.0, 0.0, 0.05));
+            }
+            Key::Character(ch) if ch == "d" => {
+                // Move the camera forward
+                self.scene.camera.move_camera(Vec3::new(0.05, 0.0, 0.0));
+            }
+            Key::Character(ch) if ch == "a" => {
+                // Move the camera forward
+                self.scene.camera.move_camera(Vec3::new(-0.05, 0.0, 0.0));
+            }
             _ => {}
         }
     }

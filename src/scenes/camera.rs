@@ -12,7 +12,7 @@ pub struct Camera {
 impl Camera {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 0.4),
+            position: Vec3::new(0.0, 0.0, 1.0),
             rotation: Vec3::new(0.0, 0.0, 0.0),
             fov: 0.5 * std::f32::consts::PI,
             aspect_ratio: width / height,
@@ -41,5 +41,11 @@ impl Camera {
 
     pub fn projection_matrix(&self) -> Mat4 {
         Mat4::perspective(self.fov, self.aspect_ratio, self.near, self.far)
+    }
+
+    /// Move the camera by a given amount
+    /// This will add the vec given here to the position vector of the camera
+    pub fn move_camera(&mut self, vec: Vec3) {
+        self.position = self.position + vec;
     }
 }
