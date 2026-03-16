@@ -4,6 +4,7 @@ pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
     pub pixels: Vec<u8>,
+    pub depth: Vec<f32>,
 }
 
 impl Framebuffer {
@@ -13,6 +14,7 @@ impl Framebuffer {
             width,
             height,
             pixels: vec![0; width * height * 4], // Assuming RGBA format (4 bytes per pixel)
+            depth: vec![f32::INFINITY; width * height], // Initialize depth buffer with infinity
         }
     }
 
@@ -29,6 +31,20 @@ impl Framebuffer {
     pub fn clear(&mut self, color: [u8; 4]) {
         for chunk in self.pixels.chunks_exact_mut(4) {
             chunk.copy_from_slice(&color);
+        }
+        self.depth.fill(f32::INFINITY);
+    }
+
+    pub fn test_and_set_depth(&mut self, x: usize, y: usize, depth: f32) -> bool {
+        if x >= self.width || y >= self.height {
+            return false;
+        }
+        let idx = y * self.width + x;
+        if depth < self.depth[idx] {
+            self.depth[idx] = depth;
+            true
+        } else {
+            false
         }
     }
 }

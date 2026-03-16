@@ -46,15 +46,20 @@ impl Triangle {
         }
     }
 
-    pub fn project(&self, mat: Mat4, screen_width: f32, screen_height: f32) -> (Vec2, Vec2, Vec2) {
+    pub fn project(
+        &self,
+        mat: Mat4,
+        screen_width: f32,
+        screen_height: f32,
+    ) -> ((Vec2, f32), (Vec2, f32), (Vec2, f32)) {
         let project_vertex = |v: Vec3| {
             let clip = mat * Vec4::from_vec3(v, 1.0);
             let ndc_x = clip.x / clip.w;
             let ndc_y = clip.y / clip.w;
-            let _z = clip.z / clip.w; // keep for depth buffer later
+            let z = clip.z / clip.w;
             let screen_x = (ndc_x + 1.0) * 0.5 * screen_width;
-            let screen_y = (1.0 - ndc_y) * 0.5 * screen_height; // y flipped
-            Vec2::new(screen_x, screen_y)
+            let screen_y = (1.0 - ndc_y) * 0.5 * screen_height;
+            (Vec2::new(screen_x, screen_y), z)
         };
 
         (
@@ -81,7 +86,7 @@ impl Triangle {
         (Vec2::new(min_x, min_y), Vec2::new(max_x, max_y))
     }
 
-    pub fn contains_point(&self, p: Vec2) -> bool {
+    pub fn contains_point(&self, p: Vec2) -> Option<(f32, f32, f32)> {
         let v0v1 = Vec3 {
             x: self.v1.x - self.v0.x,
             y: self.v1.y - self.v0.y,
@@ -95,7 +100,7 @@ impl Triangle {
         let v0p = Vec3 {
             x: p.x - self.v0.x,
             y: p.y - self.v0.y,
-            z: 0.0, // assume point is in the same plane
+            z: 0.0,
         };
 
         let dot00 = v0v2.dot(v0v2);
@@ -108,6 +113,11 @@ impl Triangle {
         let u = (dot11 * dot02 - dot01 * dot12) * inv_denom;
         let v = (dot00 * dot12 - dot01 * dot02) * inv_denom;
 
-        u >= 0.0 && v >= 0.0 && (u + v) < 1.0
+        if u >= 0.0 && v >= 0.0 && (u + v) < 1.0 {
+            let w = 1.0 - u - v;
+            Some((w, v, u))
+        } else {
+            None
+        }
     }
 }

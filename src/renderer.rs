@@ -37,8 +37,8 @@ impl Renderer {
             // Transform to camera space
             let camera_triangle = world_triangle.transform(view_matrix);
 
-            // Project to screen space — returns 2D points
-            let (p0, p1, p2) = camera_triangle.project(
+            // Project to screen space
+            let ((p0, z0), (p1, z1), (p2, z2)) = camera_triangle.project(
                 projection_matrix,
                 framebuffer.width as f32,
                 framebuffer.height as f32,
@@ -82,8 +82,11 @@ impl Renderer {
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
                     let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-                    if screen_triangle.contains_point(p) {
-                        framebuffer.set_pixel(x as usize, y as usize, shaded_color);
+                    if let Some((w0, w1, w2)) = screen_triangle.contains_point(p) {
+                        let depth = w0 * z0 + w1 * z1 + w2 * z2;
+                        if framebuffer.test_and_set_depth(x as usize, y as usize, depth) {
+                            framebuffer.set_pixel(x as usize, y as usize, shaded_color);
+                        }
                     }
                 }
             }
