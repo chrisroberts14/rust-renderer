@@ -5,10 +5,10 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
+use crate::fps::FpsCounter;
 use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
-use crate::fps::FpsCounter;
 
 pub(crate) const WIDTH: u32 = 800;
 pub(crate) const HEIGHT: u32 = 600;
@@ -18,7 +18,7 @@ pub struct App {
     pixels: Option<Pixels<'static>>,
     framebuffer: Framebuffer,
     scene: Scene,
-    fps_counter: FpsCounter
+    fps_counter: FpsCounter,
 }
 
 impl App {
@@ -28,7 +28,7 @@ impl App {
             pixels: None,
             framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
             scene,
-            fps_counter: FpsCounter::new()
+            fps_counter: FpsCounter::new(),
         }
     }
 
@@ -106,6 +106,18 @@ impl ApplicationHandler for App {
                 pixels.render().unwrap();
                 self.fps_counter.tick();
                 self.window.as_ref().unwrap().request_redraw();
+            }
+            WindowEvent::SurfaceResized(new_size) => {
+                let pixels = self.pixels.as_mut().unwrap();
+                if let Err(e) = pixels.resize_surface(new_size.width, new_size.height) {
+                    eprintln!("Failed to resize surface: {:?}", e);
+                }
+                if let Err(e) = pixels.resize_buffer(new_size.width, new_size.height) {
+                    eprintln!("Failed to resize buffer: {:?}", e);
+                }
+                self.framebuffer =
+                    Framebuffer::new(new_size.width as usize, new_size.height as usize);
+                self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..

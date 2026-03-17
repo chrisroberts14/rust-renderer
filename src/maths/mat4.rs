@@ -1,3 +1,4 @@
+use std::array;
 use std::ops::Mul;
 
 use crate::maths::vec4::Vec4;
@@ -99,15 +100,9 @@ impl Mat4 {
     }
 
     pub fn transpose(&self) -> Mat4 {
-        let mut result = [[0.0; 4]; 4];
-
-        for i in 0..4 {
-            for j in 0..4 {
-                result[i][j] = self.m[j][i];
-            }
+        Mat4 {
+            m: array::from_fn(|i| array::from_fn(|j| self.m[j][i])),
         }
-
-        Mat4 { m: result }
     }
 
     pub fn inverse(&self) -> Option<Mat4> {
@@ -228,11 +223,8 @@ impl Mat4 {
 
         let det_inv = 1.0 / det;
 
-        for i in 0..4 {
-            for j in 0..4 {
-                inv[i][j] *= det_inv;
-            }
-        }
+        inv.iter_mut()
+            .for_each(|row| row.iter_mut().for_each(|x| *x *= det_inv));
 
         Some(Mat4 { m: inv })
     }

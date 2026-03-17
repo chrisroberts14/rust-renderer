@@ -52,47 +52,35 @@ impl Renderer {
             let v1 = vertices_cam[*i1];
             let v2 = vertices_cam[*i2];
 
-            let v0_world = vertices_world[*i0];
-            let v1_world = vertices_world[*i1];
-            let v2_world = vertices_world[*i2];
+            let cam_tri = Triangle::new(v0, v1, v2);
+
+            // Backface culling in camera space (camera is at origin)
+            if cam_tri.is_backface(Vec3::new(0.0, 0.0, 0.0)) {
+                continue;
+            }
+
+            let ((p0, z0), (p1, z1), (p2, z2)) =
+                cam_tri.project(projection, width as f32, height as f32);
+
+            let screen_tri = Triangle::new(
+                Vec3::new(p0.x, p0.y, 0.0),
+                Vec3::new(p1.x, p1.y, 0.0),
+                Vec3::new(p2.x, p2.y, 0.0),
+            );
+
+            let (min, max) = screen_tri.bounding_box();
+            let min_x = (min.x.floor() as i32).max(0);
+            let max_x = (max.x.ceil() as i32).min(width - 1);
+            let min_y = (min.y.floor() as i32).max(0);
+            let max_y = (max.y.ceil() as i32).min(height - 1);
 
             let n0 = normals_world[*i0];
             let n1 = normals_world[*i1];
             let n2 = normals_world[*i2];
 
-            // Backface culling
-            let e1 = v1 - v0;
-            let e2 = v2 - v0;
-            let normal = e1.cross(e2);
-
-            if normal.dot(-v0) <= 0.0 {
-                continue;
-            }
-
-            let ((p0, z0), (p1, z1), (p2, z2)) =
-                Triangle::new(v0, v1, v2).project(projection, width as f32, height as f32);
-
-            let x0 = p0.x;
-            let y0 = p0.y;
-            let x1 = p1.x;
-            let y1 = p1.y;
-            let x2 = p2.x;
-            let y2 = p2.y;
-
-            let min_x = x0.min(x1).min(x2).floor().max(0.0) as i32;
-            let max_x = x0.max(x1).max(x2).ceil().min(width as f32 - 1.0) as i32;
-            let min_y = y0.min(y1).min(y2).floor().max(0.0) as i32;
-            let max_y = y0.max(y1).max(y2).ceil().min(height as f32 - 1.0) as i32;
-
-            // Edge function constants
-            let area = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0);
-            if area == 0.0 {
-                continue;
-            }
-            let inv_area = 1.0 / area;
-
             let lighting = light_source.as_ref().map(|light| {
-                let centre = (v0_world + v1_world + v2_world) / 3.0;
+                let centre =
+                    (vertices_world[*i0] + vertices_world[*i1] + vertices_world[*i2]) / 3.0;
                 (light.intensity_at(centre), light.direction_to(centre))
             });
 
@@ -106,26 +94,21 @@ impl Renderer {
                     let px = x as f32 + 0.5;
                     let py = y as f32 + 0.5;
 
-                    let w0 = ((x1 - px) * (y2 - py) - (y1 - py) * (x2 - px)) * inv_area;
-                    let w1 = ((x2 - px) * (y0 - py) - (y2 - py) * (x0 - px)) * inv_area;
-                    let w2 = 1.0 - w0 - w1;
-
-                    if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
+                    if let Some((w0, w1, w2)) = screen_tri.contains_point(px, py) {
                         let depth = w0 * z0 + w1 * z1 + w2 * z2;
-
                         let ux = x as usize;
                         let uy = y as usize;
 
                         if framebuffer.test_and_set_depth(ux, uy, depth) {
                             let normal = n0 * w0 + n1 * w1 + n2 * w2;
 
-                            let mut diffuse_intensity = AMBIENT;
-
-                            if let Some((distance_intensity, light_dir)) = lighting {
-                                let diffuse = light_dir.dot(normal).max(0.0);
-                                diffuse_intensity =
-                                    AMBIENT + (1.0 - AMBIENT) * diffuse * distance_intensity;
-                            }
+                            let diffuse_intensity =
+                                if let Some((distance_intensity, light_dir)) = lighting {
+                                    let diffuse = light_dir.dot(normal).max(0.0);
+                                    AMBIENT + (1.0 - AMBIENT) * diffuse * distance_intensity
+                                } else {
+                                    AMBIENT
+                                };
 
                             framebuffer.set_pixel(
                                 ux,

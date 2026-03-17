@@ -31,21 +31,6 @@ impl Triangle {
         Triangle { v0, v1, v2, normal }
     }
 
-    pub fn transform(&self, mat: Mat4) -> Triangle {
-        let new_v0 = (mat * Vec4::from_vec3(self.v0, 1.0)).to_vec3();
-        let new_v1 = (mat * Vec4::from_vec3(self.v1, 1.0)).to_vec3();
-        let new_v2 = (mat * Vec4::from_vec3(self.v2, 1.0)).to_vec3();
-        Triangle::new(new_v0, new_v1, new_v2)
-    }
-
-    pub fn centre(&self) -> Vec3 {
-        Vec3 {
-            x: (self.v0.x + self.v1.x + self.v2.x) / 3.0,
-            y: (self.v0.y + self.v1.y + self.v2.y) / 3.0,
-            z: (self.v0.z + self.v1.z + self.v2.z) / 3.0,
-        }
-    }
-
     pub fn project(
         &self,
         mat: Mat4,
