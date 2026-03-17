@@ -16,17 +16,13 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(width: f32, height: f32, objects: Vec<Object>, lights: Vec<PointLight>) -> Self {
         Self {
-            objects: Arc::new(RwLock::new(Vec::new())),
+            objects: Arc::new(RwLock::new(objects)),
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
-            lights: Vec::new(),
+            lights,
         }
-    }
-
-    pub fn add_object(&mut self, object: Object) {
-        self.objects.write().unwrap().push(object);
     }
 
     /// Spawn a thread that continuously updates object transforms

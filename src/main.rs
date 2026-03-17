@@ -21,35 +21,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut scene = Scene::new(800.0, 600.0);
-    let monkey_mesh = ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?;
-    let teapot_mesh = ObjLoader::load(Path::new("teapot.obj"), [255, 255, 255, 255])?;
-    scene.add_object(Object::new(
-        monkey_mesh,
-        Transform::with_position(Vec3::new(0.0, 2.0, 0.0)),
-    ));
-    scene.add_object(Object::new(
-        teapot_mesh,
-        Transform::with_position(Vec3::new(0.0, -2.0, 0.0)),
-    ));
+    // Here we create the scene
+    // For now this consists of a teapot a monkey and 3 point lights of different colours
 
-    scene.lights.push(PointLight::new(
-        Vec3::new(0.0, 0.0, 5.0),
-        [1.0, 0.0, 0.0],
-        15.0,
-    ));
+    let scene_objects = vec![
+        Object::new(
+            ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?,
+            Transform::with_position(Vec3::new(0.0, 2.0, 0.0)),
+        ),
+        Object::new(
+            ObjLoader::load(Path::new("teapot.obj"), [255, 255, 255, 255])?,
+            Transform::with_position(Vec3::new(0.0, -2.0, 0.0)),
+        ),
+    ];
 
-    scene.lights.push(PointLight::new(
-        Vec3::new(5.0, 0.0, 0.0),
-        [0.0, 1.0, 0.0],
-        15.0,
-    ));
+    let scene_lights = vec![
+        PointLight::new(Vec3::new(0.0, 0.0, 5.0), [1.0, 0.0, 0.0], 15.0),
+        PointLight::new(Vec3::new(5.0, 0.0, 0.0), [0.0, 1.0, 0.0], 20.0),
+        PointLight::new(Vec3::new(-5.0, 0.0, 0.0), [0.0, 0.0, 1.0], 15.0),
+    ];
 
-    scene.lights.push(PointLight::new(
-        Vec3::new(-5.0, 0.0, 0.0),
-        [0.0, 0.0, 1.0],
-        15.0,
-    ));
+    let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
     let _update_handle = scene.spawn_update_thread();
 
