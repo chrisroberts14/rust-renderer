@@ -9,9 +9,6 @@ use crate::fps::FpsCounter;
 use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
-pub(crate) const WIDTH: u32 = 800;
-pub(crate) const HEIGHT: u32 = 600;
-
 pub struct App {
     window: Option<&'static dyn Window>,
     pixels: Option<Pixels<'static>>,
@@ -63,15 +60,23 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let attrs = WindowAttributes::default().with_title("rust-renderer");
+        let attrs = WindowAttributes::default()
+            .with_title("rust-renderer")
+            .with_surface_size(winit::dpi::PhysicalSize {
+                width: self.scene.framebuffer.width as f32,
+                height: self.scene.framebuffer.height as f32,
+            });
 
         let window = event_loop.create_window(attrs).unwrap();
 
         // Leak the window to get a 'static reference
         let window_ref: &'static dyn Window = Box::leak(window);
 
-        let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, window_ref);
-        let pixels = PixelsBuilder::new(WIDTH, HEIGHT, surface_texture)
+        let window_size = window_ref.surface_size();
+
+        let surface_texture =
+            SurfaceTexture::new(window_size.width, window_size.height, window_ref);
+        let pixels = PixelsBuilder::new(window_size.width, window_size.height, surface_texture)
             .present_mode(pixels::wgpu::PresentMode::AutoNoVsync)
             .build()
             .unwrap();

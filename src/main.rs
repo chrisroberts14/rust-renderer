@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut scene = Scene::new(app::HEIGHT as f32, app::WIDTH as f32);
+    let mut scene = Scene::new(800.0, 600.0);
     let monkey_mesh = ObjLoader::load(Path::new("monkey.obj"), [255, 255, 0, 255])?;
     let teapot_mesh = ObjLoader::load(Path::new("teapot.obj"), [255, 0, 255, 255])?;
     scene.add_object(Object::new(

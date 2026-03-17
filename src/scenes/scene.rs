@@ -14,7 +14,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(height: f32, width: f32) -> Self {
+    pub fn new(width: f32, height: f32) -> Self {
         Self {
             objects: Arc::new(RwLock::new(Vec::new())),
             framebuffer: Framebuffer::new(width as usize, height as usize),
