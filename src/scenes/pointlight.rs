@@ -35,9 +35,9 @@ impl PointLight {
     pub fn colour_at(&self, point: Vec3) -> [f32; 3] {
         let intensity = self.intensity_at(point);
         [
-            self.colour[0] / 255.0 * intensity,
-            self.colour[1] / 255.0 * intensity,
-            self.colour[2] / 255.0 * intensity,
+            self.colour[0] * intensity,
+            self.colour[1] * intensity,
+            self.colour[2] * intensity,
         ]
     }
 }

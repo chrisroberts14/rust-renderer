@@ -67,7 +67,7 @@ impl Renderer {
     pub fn draw_object(
         object: &Object,
         camera: &Camera,
-        light_source: &Option<PointLight>,
+        lights: &[PointLight],
         framebuffer: &mut Framebuffer,
     ) {
         let model = object.transform.matrix();
@@ -148,10 +148,11 @@ impl Renderer {
                 let min_y = (min.y.floor() as i32).max(0);
                 let max_y = (max.y.ceil() as i32).min(height - 1);
 
-                let lighting = light_source.as_ref().map(|light| {
-                    let centre = (v0_w + v1_w + v2_w) / 3.0;
-                    (light.colour_at(centre), light.direction_to(centre)) // [f32;3] instead of f32
-                });
+                let centre = (v0_w + v1_w + v2_w) / 3.0;
+                let lighting: Vec<([f32; 3], Vec3)> = lights
+                    .iter()
+                    .map(|light| (light.colour_at(centre), light.direction_to(centre)))
+                    .collect();
 
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
@@ -166,13 +167,15 @@ impl Renderer {
                             if framebuffer.test_and_set_depth(ux, uy, depth) {
                                 let normal = n0 * w0 + n1 * w1 + n2 * w2;
 
-                                let [lr, lg, lb] = if let Some((light_colour, light_dir)) = lighting
-                                {
+                                let mut diffuse_rgb = [0.0f32; 3];
+                                for (light_colour, light_dir) in &lighting {
                                     let diffuse = light_dir.dot(normal).max(0.0);
-                                    light_colour.map(|c| AMBIENT + (1.0 - AMBIENT) * diffuse * c)
-                                } else {
-                                    [AMBIENT; 3]
-                                };
+                                    for i in 0..3 {
+                                        diffuse_rgb[i] += diffuse * light_colour[i];
+                                    }
+                                }
+                                let [lr, lg, lb] =
+                                    diffuse_rgb.map(|c| (AMBIENT + (1.0 - AMBIENT) * c).min(1.0));
 
                                 framebuffer.set_pixel(
                                     ux,

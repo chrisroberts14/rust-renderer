@@ -33,9 +33,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Transform::with_position(Vec3::new(0.0, -2.0, 0.0)),
     ));
 
-    scene.light = Some(PointLight::new(
+    scene.lights.push(PointLight::new(
         Vec3::new(0.0, 0.0, 5.0),
-        [255.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        15.0,
+    ));
+
+    scene.lights.push(PointLight::new(
+        Vec3::new(5.0, 0.0, 0.0),
+        [0.0, 1.0, 0.0],
         15.0,
     ));
 

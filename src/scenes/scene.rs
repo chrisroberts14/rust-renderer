@@ -1,16 +1,15 @@
+use crate::scenes::camera::Camera;
+use crate::scenes::pointlight::PointLight;
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
-use crate::scenes::camera::Camera;
-use crate::scenes::pointlight::PointLight;
-
 pub struct Scene {
     pub objects: Arc<RwLock<Vec<Object>>>,
     pub framebuffer: Framebuffer,
     pub camera: Camera,
-    pub light: Option<PointLight>,
+    pub lights: Vec<PointLight>,
 }
 
 impl Scene {
@@ -19,7 +18,7 @@ impl Scene {
             objects: Arc::new(RwLock::new(Vec::new())),
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
-            light: None,
+            lights: Vec::new(),
         }
     }
 
@@ -49,7 +48,7 @@ impl Scene {
     pub fn render_objects(&mut self) {
         let objects = self.objects.read().unwrap();
         for object in objects.iter() {
-            Renderer::draw_object(object, &self.camera, &self.light, &mut self.framebuffer);
+            Renderer::draw_object(object, &self.camera, &self.lights, &mut self.framebuffer);
         }
     }
 }
