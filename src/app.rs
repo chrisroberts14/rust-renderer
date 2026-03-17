@@ -101,7 +101,13 @@ impl ApplicationHandler for App {
                 self.scene.render_objects(&mut self.framebuffer);
 
                 let pixels = self.pixels.as_mut().unwrap();
-                pixels.frame_mut().copy_from_slice(&self.framebuffer.pixels);
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(
+                        self.framebuffer.pixels.as_ptr() as *const u8,
+                        self.framebuffer.pixels.len(),
+                    )
+                };
+                pixels.frame_mut().copy_from_slice(bytes);
 
                 pixels.render().unwrap();
                 self.fps_counter.tick();

@@ -1,10 +1,12 @@
+use std::sync::atomic::{AtomicU8, AtomicU32};
+
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
 #[derive(Default)]
 pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<u8>,
-    pub depth: Vec<f32>,
+    pub pixels: Vec<AtomicU8>,
+    pub depth: Vec<AtomicU32>,
 }
 
 impl Framebuffer {
@@ -13,35 +15,51 @@ impl Framebuffer {
         Self {
             width,
             height,
-            pixels: vec![0; width * height * 4], // Assuming RGBA format (4 bytes per pixel)
-            depth: vec![f32::INFINITY; width * height], // Initialize depth buffer with infinity
+            pixels: (0..width * height * 4).map(|_| AtomicU8::new(0)).collect(),
+            depth: (0..width * height)
+                .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
+                .collect(),
         }
     }
 
     /// Set a single pixel
-    pub fn set_pixel(&mut self, x: usize, y: usize, color: [u8; 4]) {
+    pub fn set_pixel(&self, x: usize, y: usize, color: [u8; 4]) {
         if x >= self.width || y >= self.height {
             return; // silently ignore out-of-bounds
         }
         let idx = (y * self.width + x) * 4;
-        self.pixels[idx..idx + 4].copy_from_slice(&color);
+        self.pixels[idx..idx + 4]
+            .iter()
+            .zip(color.iter())
+            .for_each(|(p, c)| {
+                p.store(*c, std::sync::atomic::Ordering::Relaxed);
+            });
     }
 
     /// Clear the framebuffer with a given color [R,G,B,A]
-    pub fn clear(&mut self, color: [u8; 4]) {
-        for chunk in self.pixels.chunks_exact_mut(4) {
-            chunk.copy_from_slice(&color);
-        }
-        self.depth.fill(f32::INFINITY);
+    pub fn clear(&self, color: [u8; 4]) {
+        self.pixels.chunks_exact(4).for_each(|chunk| {
+            chunk.iter().zip(color.iter()).for_each(|(p, c)| {
+                p.store(*c, std::sync::atomic::Ordering::Relaxed);
+            })
+        });
+        self.depth.iter().for_each(|d| {
+            d.store(
+                f32::INFINITY.to_bits(),
+                std::sync::atomic::Ordering::Relaxed,
+            )
+        });
     }
 
-    pub fn test_and_set_depth(&mut self, x: usize, y: usize, depth: f32) -> bool {
+    pub fn test_and_set_depth(&self, x: usize, y: usize, depth: f32) -> bool {
         if x >= self.width || y >= self.height {
             return false;
         }
         let idx = y * self.width + x;
-        if depth < self.depth[idx] {
-            self.depth[idx] = depth;
+        let depth_bits = depth.to_bits();
+        let current_depth_bits = self.depth[idx].load(std::sync::atomic::Ordering::Relaxed);
+        if depth_bits < current_depth_bits {
+            self.depth[idx].store(depth_bits, std::sync::atomic::Ordering::Relaxed);
             true
         } else {
             false
@@ -51,7 +69,11 @@ impl Framebuffer {
     pub fn resize(&mut self, new_width: usize, new_height: usize) {
         self.width = new_width;
         self.height = new_height;
-        self.pixels.resize(new_width * new_height * 4, 0);
-        self.depth.resize(new_width * new_height, f32::INFINITY);
+        self.pixels = (0..new_width * new_height * 4)
+            .map(|_| AtomicU8::new(0))
+            .collect();
+        self.depth = (0..new_width * new_height)
+            .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
+            .collect();
     }
 }
