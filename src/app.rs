@@ -34,24 +34,27 @@ impl App {
             return;
         }
         match &key_event.logical_key {
-            Key::Character(ch) if ch == "c" => {
-                self.scene.framebuffer.clear([0, 0, 0, 255]);
-            }
             Key::Character(ch) if ch == "w" => {
-                // Move the camera forward
-                self.scene.camera.move_camera(Vec3::new(0.0, 0.0, -0.05));
+                let dir = self.scene.camera.forward();
+                self.scene.camera.move_camera(dir * 0.05);
             }
             Key::Character(ch) if ch == "s" => {
-                // Move the camera forward
-                self.scene.camera.move_camera(Vec3::new(0.0, 0.0, 0.05));
+                let dir = self.scene.camera.forward();
+                self.scene.camera.move_camera(dir * -0.05);
             }
             Key::Character(ch) if ch == "d" => {
-                // Move the camera forward
-                self.scene.camera.move_camera(Vec3::new(0.05, 0.0, 0.0));
+                let dir = self.scene.camera.right();
+                self.scene.camera.move_camera(dir * 0.05);
             }
             Key::Character(ch) if ch == "a" => {
-                // Move the camera forward
-                self.scene.camera.move_camera(Vec3::new(-0.05, 0.0, 0.0));
+                let dir = self.scene.camera.right();
+                self.scene.camera.move_camera(dir * -0.05);
+            }
+            Key::Character(ch) if ch == " " => {
+                self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
+            }
+            Key::Character(ch) if ch == "shift" => {
+                self.scene.camera.move_camera(self.scene.camera.up() * -0.05);
             }
             _ => {}
         }

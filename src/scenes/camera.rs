@@ -22,21 +22,20 @@ impl Camera {
     }
 
     pub fn view_matrix(&self) -> Mat4 {
-        let rx = -self.rotation.x;
-        let ry = -self.rotation.y;
-        let rz = -self.rotation.z;
+        let f = self.forward();
+        let r = self.right();
+        let u = self.up();
 
-        let px = -self.position.x;
-        let py = -self.position.y;
-        let pz = -self.position.z;
+        let p = self.position;
 
-        let rot_x = Mat4::rotation_x(rx);
-        let rot_y = Mat4::rotation_y(ry);
-        let rot_z = Mat4::rotation_z(rz);
-
-        let trans = Mat4::translation(px, py, pz);
-
-        rot_y * rot_x * rot_z * trans
+        Mat4 {
+            m: [
+                [r.x, r.y, r.z, -r.dot(p)],
+                [u.x, u.y, u.z, -u.dot(p)],
+                [-f.x, -f.y, -f.z, f.dot(p)], // 👈 KEEP THIS
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        }
     }
 
     pub fn projection_matrix(&self) -> Mat4 {
@@ -49,10 +48,33 @@ impl Camera {
         self.position = self.position + vec;
     }
 
+    pub fn forward(&self) -> Vec3 {
+        let yaw = self.rotation.y;
+        let pitch = self.rotation.x;
+
+        Vec3::new(
+            yaw.sin() * pitch.cos(),
+            -pitch.sin(),
+            -yaw.cos() * pitch.cos(),
+        ).normalise()
+    }
+
+    pub fn right(&self) -> Vec3 {
+        Vec3::new(0.0, 1.0, 0.0)
+            .cross(self.forward()) // 👈 order matters
+            .normalise()
+    }
+
+    pub fn up(&self) -> Vec3 {
+        self.forward()
+            .cross(self.right())
+            .normalise()
+    }
+
     pub fn process_mouse(&mut self, dx: f32, dy: f32) {
         let sensitivity = 0.002;
         self.rotation.y -= dx * sensitivity; // yaw
-        self.rotation.x -= dy * sensitivity; // pitch
+        self.rotation.x += dy * sensitivity; // pitch
 
         // Clamp pitch to avoid flipping
         let max_pitch = std::f32::consts::FRAC_PI_2 - 0.01;

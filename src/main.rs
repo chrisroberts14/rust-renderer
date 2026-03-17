@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
-    let _update_handle = scene.spawn_update_thread();
+    //let _update_handle = scene.spawn_update_thread();
 
     let app = App::new(scene);
 

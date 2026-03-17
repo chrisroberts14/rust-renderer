@@ -107,13 +107,6 @@ impl Renderer {
             let v1 = vertices_cam[*i1];
             let v2 = vertices_cam[*i2];
 
-            let cam_tri = Triangle::new(v0, v1, v2);
-
-            // Backface culling in camera space (camera is at origin)
-            if cam_tri.is_backface(Vec3::new(0.0, 0.0, 0.0)) {
-                continue;
-            }
-
             let verts: [Vert; 3] = [
                 (v0, vertices_world[*i0], normals_world[*i0]),
                 (v1, vertices_world[*i1], normals_world[*i1]),
@@ -124,7 +117,7 @@ impl Renderer {
             if clipped.is_empty() {
                 continue;
             }
-
+        
             let base_color = object.mesh.color_of(face_idx);
             let r = base_color[0] as f32;
             let g = base_color[1] as f32;
@@ -153,6 +146,13 @@ impl Renderer {
                     for x in min_x..=max_x {
                         let px = x as f32 + 0.5;
                         let py = y as f32 + 0.5;
+
+                        let area = (p1.x - p0.x)*(p2.y - p0.y)
+                                - (p2.x - p0.x)*(p1.y - p0.y);
+
+                        if area <= 0.0 {
+                            continue;
+                        }
 
                         if let Some((w0, w1, w2)) = screen_tri.contains_point(px, py) {
                             let depth = w0 * z0 + w1 * z1 + w2 * z2;
