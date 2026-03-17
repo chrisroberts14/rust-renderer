@@ -36,7 +36,7 @@ impl Camera {
 
         let trans = Mat4::translation(px, py, pz);
 
-        rot_x * rot_y * rot_z * trans
+        rot_y * rot_x * rot_z * trans
     }
 
     pub fn projection_matrix(&self) -> Mat4 {
@@ -47,5 +47,15 @@ impl Camera {
     /// This will add the vec given here to the position vector of the camera
     pub fn move_camera(&mut self, vec: Vec3) {
         self.position = self.position + vec;
+    }
+
+    pub fn process_mouse(&mut self, dx: f32, dy: f32) {
+        let sensitivity = 0.002;
+        self.rotation.y -= dx * sensitivity; // yaw
+        self.rotation.x -= dy * sensitivity; // pitch
+
+        // Clamp pitch to avoid flipping
+        let max_pitch = std::f32::consts::FRAC_PI_2 - 0.01;
+        self.rotation.x = self.rotation.x.clamp(-max_pitch, max_pitch);
     }
 }

@@ -1,9 +1,9 @@
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::Key;
-use winit::window::{Window, WindowAttributes};
+use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::fps::FpsCounter;
 use crate::maths::vec3::Vec3;
@@ -84,11 +84,29 @@ impl ApplicationHandler for App {
         self.window = Some(window_ref);
         self.pixels = Some(pixels);
 
+        window_ref.set_cursor_visible(false);
+        window_ref.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+
         window_ref.request_redraw();
     }
 
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.resumed(event_loop);
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &dyn ActiveEventLoop,
+        _device_id: Option<DeviceId>,
+        event: DeviceEvent,
+    ) {
+        match event {
+            DeviceEvent::PointerMotion { delta } => {
+                let (dx, dy) = delta;
+                self.scene.camera.process_mouse(dx as f32, dy as f32);
+            }
+            _ => {}
+        }
     }
 
     fn window_event(
