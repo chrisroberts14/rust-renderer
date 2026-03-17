@@ -7,28 +7,11 @@ pub(crate) struct Triangle {
     v0: Vec3,
     v1: Vec3,
     v2: Vec3,
-    pub normal: Vec3,
 }
 
 impl Triangle {
     pub(crate) fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Triangle {
-        let v0v1 = Vec3 {
-            x: v1.x - v0.x,
-            y: v1.y - v0.y,
-            z: v1.z - v0.z,
-        };
-        let v0v2 = Vec3 {
-            x: v2.x - v0.x,
-            y: v2.y - v0.y,
-            z: v2.z - v0.z,
-        };
-        let normal = Vec3 {
-            x: v0v1.y * v0v2.z - v0v1.z * v0v2.y,
-            y: v0v1.z * v0v2.x - v0v1.x * v0v2.z,
-            z: v0v1.x * v0v2.y - v0v1.y * v0v2.x,
-        }
-        .normalise();
-        Triangle { v0, v1, v2, normal }
+        Triangle { v0, v1, v2 }
     }
 
     pub fn project(
@@ -52,15 +35,6 @@ impl Triangle {
             project_vertex(self.v1),
             project_vertex(self.v2),
         )
-    }
-
-    pub fn is_backface(&self, camera_pos: Vec3) -> bool {
-        let to_camera = Vec3 {
-            x: camera_pos.x - self.v0.x,
-            y: camera_pos.y - self.v0.y,
-            z: camera_pos.z - self.v0.z,
-        };
-        self.normal.dot(to_camera) < 0.0
     }
 
     pub fn bounding_box(&self) -> (Vec2, Vec2) {

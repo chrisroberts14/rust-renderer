@@ -6,7 +6,6 @@ use winit::keyboard::Key;
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::fps::FpsCounter;
-use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
 pub struct App {
