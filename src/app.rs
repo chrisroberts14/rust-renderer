@@ -103,6 +103,7 @@ impl ApplicationHandler for App {
                 self.scene.framebuffer.clear([0, 0, 0, 255]);
 
                 self.scene.render_objects();
+                self.scene.render_lights();
                 self.fps_counter.tick(&mut self.scene.framebuffer);
 
                 let pixels = self.pixels.as_mut().unwrap();

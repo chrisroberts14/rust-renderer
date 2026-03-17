@@ -1,3 +1,6 @@
+use crate::geometry::cube::Cube;
+use crate::geometry::transform::Transform;
+use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
@@ -49,6 +52,30 @@ impl Scene {
         let objects = self.objects.read().unwrap();
         for object in objects.iter() {
             Renderer::draw_object(object, &self.camera, &self.lights, &mut self.framebuffer);
+        }
+    }
+
+    /// Render small box representations around the point lights for debugging purposes
+    /// In order to actually see it we need it to be lit without needing another light
+    pub fn render_lights(&mut self) {
+        for light in self.lights.iter() {
+            // Convert the lights colour from [0.0, 1.0] to [0, 255] for the framebuffer
+            let colour = [
+                (light.colour[0] * 255.0) as u8,
+                (light.colour[1] * 255.0) as u8,
+                (light.colour[2] * 255.0) as u8,
+                255,
+            ];
+
+            let light_box = Object::new(
+                Cube::mesh(1.0, colour),
+                Transform {
+                    position: light.position,
+                    rotation: Vec3::new(0.0, 0.0, 0.0),
+                    scale: Vec3::new(0.1, 0.1, 0.1),
+                },
+            );
+            Renderer::draw_object(&light_box, &self.camera, &[], &mut self.framebuffer);
         }
     }
 }

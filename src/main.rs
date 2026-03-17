@@ -45,6 +45,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         15.0,
     ));
 
+    scene.lights.push(PointLight::new(
+        Vec3::new(-5.0, 0.0, 0.0),
+        [0.0, 0.0, 1.0],
+        15.0,
+    ));
+
     let _update_handle = scene.spawn_update_thread();
 
     let app = App::new(scene);

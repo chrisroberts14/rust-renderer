@@ -174,8 +174,11 @@ impl Renderer {
                                         diffuse_rgb[i] += diffuse * light_colour[i];
                                     }
                                 }
-                                let [lr, lg, lb] =
-                                    diffuse_rgb.map(|c| (AMBIENT + (1.0 - AMBIENT) * c).min(1.0));
+                                let [lr, lg, lb] = if lights.is_empty() {
+                                    [1.0; 3]
+                                } else {
+                                    diffuse_rgb.map(|c| (AMBIENT + (1.0 - AMBIENT) * c).min(1.0))
+                                };
 
                                 framebuffer.set_pixel(
                                     ux,

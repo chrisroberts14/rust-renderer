@@ -1,12 +1,10 @@
 use crate::geometry::mesh::Mesh;
 use crate::maths::vec3::Vec3;
 
-#[allow(dead_code)]
 pub struct Cube;
 
-#[allow(dead_code)]
 impl Cube {
-    pub fn mesh(size: f32) -> Mesh {
+    pub fn mesh(size: f32, colour: [u8; 4]) -> Mesh {
         let s = size / 2.0;
 
         let vertices = vec![
@@ -45,17 +43,15 @@ impl Cube {
             (3, 7, 6),
         ];
 
-        let red = [220, 60, 60, 255];
-        let green = [60, 180, 60, 255];
-        let blue = [60, 60, 220, 255];
-        let yellow = [220, 200, 50, 255];
-        let cyan = [50, 200, 200, 255];
-        let white = [220, 220, 220, 255];
-
-        let face_colors = vec![
-            red, red, green, green, blue, blue, yellow, yellow, cyan, cyan, white, white,
+        let face_colours = vec![
+            colour, colour, // Front
+            colour, colour, // Back
+            colour, colour, // Left
+            colour, colour, // Right
+            colour, colour, // Bottom
+            colour, colour, // Top
         ];
 
-        Mesh::new(vertices, faces, face_colors)
+        Mesh::new(vertices, faces, face_colours)
     }
 }
