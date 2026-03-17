@@ -99,6 +99,7 @@ impl ApplicationHandler for App {
                 self.framebuffer.clear([0, 0, 0, 255]);
 
                 self.scene.render_objects(&mut self.framebuffer);
+                self.fps_counter.tick(&mut self.framebuffer);
 
                 let pixels = self.pixels.as_mut().unwrap();
                 let bytes: &[u8] = unsafe {
@@ -110,7 +111,6 @@ impl ApplicationHandler for App {
                 pixels.frame_mut().copy_from_slice(bytes);
 
                 pixels.render().unwrap();
-                self.fps_counter.tick();
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
