@@ -6,6 +6,7 @@ use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
 
 const AMBIENT: f32 = 0.15;
+const SHININESS: i32 = 32;
 
 pub struct Renderer;
 
@@ -148,12 +149,6 @@ impl Renderer {
                 let min_y = (min.y.floor() as i32).max(0);
                 let max_y = (max.y.ceil() as i32).min(height - 1);
 
-                let centre = (v0_w + v1_w + v2_w) / 3.0;
-                let lighting: Vec<([f32; 3], Vec3)> = lights
-                    .iter()
-                    .map(|light| (light.colour_at(centre), light.direction_to(centre)))
-                    .collect();
-
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
                         let px = x as f32 + 0.5;
@@ -165,19 +160,41 @@ impl Renderer {
                             let uy = y as usize;
 
                             if framebuffer.test_and_set_depth(ux, uy, depth) {
-                                let normal = n0 * w0 + n1 * w1 + n2 * w2;
+                                let normal = (n0 * w0 + n1 * w1 + n2 * w2).normalise();
+                                let world_pos = v0_w * w0 + v1_w * w1 + v2_w * w2;
+                                let view_dir = (camera.position - world_pos).normalise();
 
                                 let mut diffuse_rgb = [0.0f32; 3];
-                                for (light_colour, light_dir) in &lighting {
+                                let mut specular_rgb = [0.0f32; 3];
+                                for light in lights.iter() {
+                                    let light_colour = light.colour_at(world_pos);
+                                    let light_dir = light.direction_to(world_pos);
                                     let diffuse = light_dir.dot(normal).max(0.0);
+                                    let reflect =
+                                        normal * (2.0 * normal.dot(light_dir)) - light_dir;
+                                    let specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
                                     for i in 0..3 {
                                         diffuse_rgb[i] += diffuse * light_colour[i];
+                                        specular_rgb[i] += specular * light_colour[i];
                                     }
                                 }
                                 let [lr, lg, lb] = if lights.is_empty() {
                                     [1.0; 3]
                                 } else {
-                                    diffuse_rgb.map(|c| (AMBIENT + (1.0 - AMBIENT) * c).min(1.0))
+                                    [
+                                        (AMBIENT
+                                            + (1.0 - AMBIENT) * diffuse_rgb[0]
+                                            + specular_rgb[0])
+                                            .min(1.0),
+                                        (AMBIENT
+                                            + (1.0 - AMBIENT) * diffuse_rgb[1]
+                                            + specular_rgb[1])
+                                            .min(1.0),
+                                        (AMBIENT
+                                            + (1.0 - AMBIENT) * diffuse_rgb[2]
+                                            + specular_rgb[2])
+                                            .min(1.0),
+                                    ]
                                 };
 
                                 framebuffer.set_pixel(
