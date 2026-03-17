@@ -1,4 +1,4 @@
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -74,8 +74,10 @@ impl ApplicationHandler for App {
         let window_ref: &'static dyn Window = Box::leak(window);
 
         let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, window_ref);
-        // extend lifetime
-        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap();
+        let pixels = PixelsBuilder::new(WIDTH, HEIGHT, surface_texture)
+            .present_mode(pixels::wgpu::PresentMode::AutoNoVsync)
+            .build()
+            .unwrap();
 
         self.window = Some(window_ref);
         self.pixels = Some(pixels);
