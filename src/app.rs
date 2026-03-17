@@ -6,7 +6,6 @@ use winit::keyboard::Key;
 use winit::window::{Window, WindowAttributes};
 
 use crate::fps::FpsCounter;
-use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
 use crate::scenes::scene::Scene;
 
@@ -16,7 +15,6 @@ pub(crate) const HEIGHT: u32 = 600;
 pub struct App {
     window: Option<&'static dyn Window>,
     pixels: Option<Pixels<'static>>,
-    framebuffer: Framebuffer,
     scene: Scene,
     fps_counter: FpsCounter,
 }
@@ -26,7 +24,6 @@ impl App {
         Self {
             window: None,
             pixels: None,
-            framebuffer: Framebuffer::new(WIDTH as usize, HEIGHT as usize),
             scene,
             fps_counter: FpsCounter::new(),
         }
@@ -41,7 +38,7 @@ impl App {
         }
         match &key_event.logical_key {
             Key::Character(ch) if ch == "c" => {
-                self.framebuffer.clear([0, 0, 0, 255]);
+                self.scene.framebuffer.clear([0, 0, 0, 255]);
             }
             Key::Character(ch) if ch == "w" => {
                 // Move the camera forward
@@ -98,16 +95,16 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 // Clear the current framebuffer
-                self.framebuffer.clear([0, 0, 0, 255]);
+                self.scene.framebuffer.clear([0, 0, 0, 255]);
 
-                self.scene.render_objects(&mut self.framebuffer);
-                self.fps_counter.tick(&mut self.framebuffer);
+                self.scene.render_objects();
+                self.fps_counter.tick(&mut self.scene.framebuffer);
 
                 let pixels = self.pixels.as_mut().unwrap();
                 let bytes: &[u8] = unsafe {
                     std::slice::from_raw_parts(
-                        self.framebuffer.pixels.as_ptr() as *const u8,
-                        self.framebuffer.pixels.len(),
+                        self.scene.framebuffer.pixels.as_ptr() as *const u8,
+                        self.scene.framebuffer.pixels.len(),
                     )
                 };
                 pixels.frame_mut().copy_from_slice(bytes);
@@ -123,7 +120,8 @@ impl ApplicationHandler for App {
                 if let Err(e) = pixels.resize_buffer(new_size.width, new_size.height) {
                     eprintln!("Failed to resize buffer: {:?}", e);
                 }
-                self.framebuffer
+                self.scene
+                    .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);
                 self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
             }
