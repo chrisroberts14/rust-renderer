@@ -115,8 +115,8 @@ impl ApplicationHandler for App {
                 if let Err(e) = pixels.resize_buffer(new_size.width, new_size.height) {
                     eprintln!("Failed to resize buffer: {:?}", e);
                 }
-                self.framebuffer =
-                    Framebuffer::new(new_size.width as usize, new_size.height as usize);
+                self.framebuffer
+                    .resize(new_size.width as usize, new_size.height as usize);
                 self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
             }
             WindowEvent::KeyboardInput {

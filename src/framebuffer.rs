@@ -47,4 +47,11 @@ impl Framebuffer {
             false
         }
     }
+
+    pub fn resize(&mut self, new_width: usize, new_height: usize) {
+        self.width = new_width;
+        self.height = new_height;
+        self.pixels.resize(new_width * new_height * 4, 0);
+        self.depth.resize(new_width * new_height, f32::INFINITY);
+    }
 }
