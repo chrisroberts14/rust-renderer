@@ -7,7 +7,6 @@ pub struct PointLight {
     pub intensity: f32,
 }
 
-#[allow(dead_code)]
 impl PointLight {
     pub fn new(position: Vec3, colour: [f32; 3], intensity: f32) -> Self {
         Self {
@@ -36,9 +35,9 @@ impl PointLight {
     pub fn colour_at(&self, point: Vec3) -> [f32; 3] {
         let intensity = self.intensity_at(point);
         [
-            self.colour[0] * intensity,
-            self.colour[1] * intensity,
-            self.colour[2] * intensity,
+            self.colour[0] / 255.0 * intensity,
+            self.colour[1] / 255.0 * intensity,
+            self.colour[2] / 255.0 * intensity,
         ]
     }
 }

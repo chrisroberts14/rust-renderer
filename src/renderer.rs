@@ -150,7 +150,7 @@ impl Renderer {
 
                 let lighting = light_source.as_ref().map(|light| {
                     let centre = (v0_w + v1_w + v2_w) / 3.0;
-                    (light.intensity_at(centre), light.direction_to(centre))
+                    (light.colour_at(centre), light.direction_to(centre)) // [f32;3] instead of f32
                 });
 
                 for y in min_y..=max_y {
@@ -166,21 +166,21 @@ impl Renderer {
                             if framebuffer.test_and_set_depth(ux, uy, depth) {
                                 let normal = n0 * w0 + n1 * w1 + n2 * w2;
 
-                                let diffuse_intensity =
-                                    if let Some((distance_intensity, light_dir)) = lighting {
-                                        let diffuse = light_dir.dot(normal).max(0.0);
-                                        AMBIENT + (1.0 - AMBIENT) * diffuse * distance_intensity
-                                    } else {
-                                        AMBIENT
-                                    };
+                                let [lr, lg, lb] = if let Some((light_colour, light_dir)) = lighting
+                                {
+                                    let diffuse = light_dir.dot(normal).max(0.0);
+                                    light_colour.map(|c| AMBIENT + (1.0 - AMBIENT) * diffuse * c)
+                                } else {
+                                    [AMBIENT; 3]
+                                };
 
                                 framebuffer.set_pixel(
                                     ux,
                                     uy,
                                     [
-                                        (r * diffuse_intensity) as u8,
-                                        (g * diffuse_intensity) as u8,
-                                        (b * diffuse_intensity) as u8,
+                                        (r * lr) as u8,
+                                        (g * lg) as u8,
+                                        (b * lb) as u8,
                                         base_color[3],
                                     ],
                                 );

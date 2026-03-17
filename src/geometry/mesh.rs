@@ -30,7 +30,7 @@ impl Mesh {
             .unwrap_or([255, 255, 255, 255])
     }
 
-    fn compute_vertex_normals(vertices: &[Vec3], faces: &Vec<(usize, usize, usize)>) -> Vec<Vec3> {
+    fn compute_vertex_normals(vertices: &[Vec3], faces: &[(usize, usize, usize)]) -> Vec<Vec3> {
         let mut normals = vec![Vec3::new(0.0, 0.0, 0.0); vertices.len()];
 
         for (i0, i1, i2) in faces {
