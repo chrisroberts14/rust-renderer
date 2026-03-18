@@ -8,6 +8,8 @@ mod geometry;
 mod maths;
 mod renderer;
 mod scenes;
+mod texture;
+
 use crate::geometry::obj_loader::ObjLoader;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
