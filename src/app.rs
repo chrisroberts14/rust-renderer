@@ -2,7 +2,7 @@ use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::Key;
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::fps::FpsCounter;
@@ -56,6 +56,13 @@ impl App {
                 self.scene
                     .camera
                     .move_camera(self.scene.camera.up() * -0.05);
+            }
+            Key::Named(NamedKey::Escape) => {
+                self.window.unwrap().set_cursor_visible(true);
+                self.window
+                    .unwrap()
+                    .set_cursor_grab(CursorGrabMode::None)
+                    .unwrap();
             }
             _ => {}
         }
