@@ -70,6 +70,19 @@ impl App {
             _ => {}
         }
     }
+
+    /// Lock the mouse to the window and hide the cursor
+    /// With some window managers we have to use Locked and for others (like Wayland) we have to
+    /// use Confined, so we try Locked first and fall back to Confined
+    fn lock_mouse(&mut self) {
+        if let Some(window) = self.window {
+            window.set_cursor_visible(false);
+            if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+                window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
+            }
+            self.cursor_grabbed = true;
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -98,13 +111,7 @@ impl ApplicationHandler for App {
         self.window = Some(window_ref);
         self.pixels = Some(pixels);
 
-        window_ref.set_cursor_visible(false);
-        if window_ref.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-            window_ref
-                .set_cursor_grab(CursorGrabMode::Confined)
-                .unwrap();
-        }
-        self.cursor_grabbed = true;
+        self.lock_mouse();
 
         window_ref.request_redraw();
     }
@@ -163,19 +170,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Focused(gained_focus) => {
                 if gained_focus {
-                    self.window.unwrap().set_cursor_visible(false);
-                    if self
-                        .window
-                        .unwrap()
-                        .set_cursor_grab(CursorGrabMode::Locked)
-                        .is_err()
-                    {
-                        self.window
-                            .unwrap()
-                            .set_cursor_grab(CursorGrabMode::Confined)
-                            .unwrap();
-                    }
-                    self.cursor_grabbed = true;
+                    self.lock_mouse();
                 } else {
                     self.cursor_grabbed = false;
                 }
@@ -184,12 +179,7 @@ impl ApplicationHandler for App {
                 state: ElementState::Pressed,
                 ..
             } if !self.cursor_grabbed => {
-                let window = self.window.unwrap();
-                window.set_cursor_visible(false);
-                if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-                    window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
-                }
-                self.cursor_grabbed = true;
+                self.lock_mouse();
             }
             _ => (),
         }
