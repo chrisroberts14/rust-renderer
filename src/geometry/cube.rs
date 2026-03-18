@@ -52,6 +52,6 @@ impl Cube {
             colour, colour, // Top
         ];
 
-        Mesh::new(vertices, faces, face_colours)
+        Mesh::new(vertices, faces, face_colours, vec![], vec![])
     }
 }

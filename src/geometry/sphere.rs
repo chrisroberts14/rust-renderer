@@ -48,6 +48,6 @@ impl Sphere {
             }
         }
 
-        Mesh::new(vertices, faces, face_colors)
+        Mesh::new(vertices, faces, face_colors, vec![], vec![])
     }
 }

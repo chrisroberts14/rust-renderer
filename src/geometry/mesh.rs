@@ -1,11 +1,15 @@
+use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Mesh {
     pub vertices: Vec<Vec3>,
     pub faces: Vec<(usize, usize, usize)>,
     pub face_colors: Vec<[u8; 4]>,
     pub normals: Vec<Vec3>,
+    pub uvs: Vec<Vec2>,
+    pub uv_faces: Vec<(usize, usize, usize)>,
 }
 
 impl Mesh {
@@ -13,6 +17,8 @@ impl Mesh {
         vertices: Vec<Vec3>,
         faces: Vec<(usize, usize, usize)>,
         face_colors: Vec<[u8; 4]>,
+        uvs: Vec<Vec2>,
+        uv_faces: Vec<(usize, usize, usize)>,
     ) -> Self {
         let normals = Self::compute_vertex_normals(&vertices, &faces);
         Self {
@@ -20,6 +26,8 @@ impl Mesh {
             faces,
             face_colors,
             normals,
+            uvs,
+            uv_faces,
         }
     }
 
