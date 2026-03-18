@@ -54,7 +54,7 @@ impl App {
             Key::Character(ch) if ch == " " => {
                 self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
             }
-            Key::Character(ch) if ch == "shift" => {
+            Key::Named(NamedKey::Shift) => {
                 self.scene
                     .camera
                     .move_camera(self.scene.camera.up() * -0.05);
