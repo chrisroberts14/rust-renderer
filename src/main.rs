@@ -43,10 +43,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
-    let _update_handle = scene.spawn_update_thread();
+    let (update_handle, update_running) = scene.spawn_update_thread();
 
     let app = App::new(scene);
 
     event_loop.run_app(app)?;
+
+    update_running.store(false, std::sync::atomic::Ordering::Relaxed);
+    update_handle.join().unwrap();
+
     Ok(())
 }

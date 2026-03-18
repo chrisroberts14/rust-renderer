@@ -4,6 +4,7 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
@@ -25,11 +26,14 @@ impl Scene {
         }
     }
 
-    /// Spawn a thread that continuously updates object transforms
-    pub fn spawn_update_thread(&self) -> thread::JoinHandle<()> {
+    /// Spawn a thread that continuously updates object transforms.
+    /// Returns the join handle and a shutdown flag — set the flag to false and join the handle to stop the thread cleanly.
+    pub fn spawn_update_thread(&self) -> (thread::JoinHandle<()>, Arc<AtomicBool>) {
         let objects = Arc::clone(&self.objects);
-        thread::spawn(move || {
-            loop {
+        let running = Arc::new(AtomicBool::new(true));
+        let thread_running = Arc::clone(&running);
+        let handle = thread::spawn(move || {
+            while thread_running.load(Ordering::Relaxed) {
                 {
                     let mut objs = objects.write().unwrap();
                     for object in objs.iter_mut() {
@@ -41,7 +45,8 @@ impl Scene {
                 } // write lock dropped here
                 thread::sleep(Duration::from_millis(16));
             }
-        })
+        });
+        (handle, running)
     }
 
     pub fn render_objects(&mut self) {
