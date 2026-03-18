@@ -13,6 +13,7 @@ pub struct App {
     pixels: Option<Pixels<'static>>,
     scene: Scene,
     fps_counter: FpsCounter,
+    cursor_grabbed: bool,
 }
 
 impl App {
@@ -22,6 +23,7 @@ impl App {
             pixels: None,
             scene,
             fps_counter: FpsCounter::new(),
+            cursor_grabbed: false,
         }
     }
 
@@ -63,6 +65,7 @@ impl App {
                     .unwrap()
                     .set_cursor_grab(CursorGrabMode::None)
                     .unwrap();
+                self.cursor_grabbed = false;
             }
             _ => {}
         }
@@ -101,6 +104,7 @@ impl ApplicationHandler for App {
                 .set_cursor_grab(CursorGrabMode::Confined)
                 .unwrap();
         }
+        self.cursor_grabbed = true;
 
         window_ref.request_redraw();
     }
@@ -115,8 +119,9 @@ impl ApplicationHandler for App {
         _device_id: Option<DeviceId>,
         event: DeviceEvent,
     ) {
-        if let DeviceEvent::PointerMotion { delta } = event {
-            let (dx, dy) = delta;
+        if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
+            && self.cursor_grabbed
+        {
             self.scene.camera.process_mouse(dx as f32, dy as f32);
         }
     }
@@ -168,6 +173,25 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+            WindowEvent::Focused(gained_focus) => {
+                if gained_focus {
+                    self.window.unwrap().set_cursor_visible(false);
+                    if self
+                        .window
+                        .unwrap()
+                        .set_cursor_grab(CursorGrabMode::Locked)
+                        .is_err()
+                    {
+                        self.window
+                            .unwrap()
+                            .set_cursor_grab(CursorGrabMode::Confined)
+                            .unwrap();
+                    }
+                    self.cursor_grabbed = true;
+                } else {
+                    self.cursor_grabbed = false;
+                }
             }
             _ => (),
         }
