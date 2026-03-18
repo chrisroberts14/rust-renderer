@@ -113,19 +113,6 @@ impl ApplicationHandler for App {
         self.resumed(event_loop);
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &dyn ActiveEventLoop,
-        _device_id: Option<DeviceId>,
-        event: DeviceEvent,
-    ) {
-        if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
-            && self.cursor_grabbed
-        {
-            self.scene.camera.process_mouse(dx as f32, dy as f32);
-        }
-    }
-
     fn window_event(
         &mut self,
         event_loop: &dyn ActiveEventLoop,
@@ -194,6 +181,19 @@ impl ApplicationHandler for App {
                 }
             }
             _ => (),
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &dyn ActiveEventLoop,
+        _device_id: Option<DeviceId>,
+        event: DeviceEvent,
+    ) {
+        if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
+            && self.cursor_grabbed
+        {
+            self.scene.camera.process_mouse(dx as f32, dy as f32);
         }
     }
 }
