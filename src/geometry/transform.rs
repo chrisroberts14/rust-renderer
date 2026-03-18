@@ -34,6 +34,14 @@ impl Transform {
 
         translation * rz * ry * rx * scale
     }
+
+    /// Returns the model matrix and the normal matrix (inverse-transpose of model).
+    /// Used to correctly transform normals when the model has non-uniform scaling.
+    pub fn matrices(&self) -> (Mat4, Mat4) {
+        let model = self.matrix();
+        let normal = model.inverse().unwrap().transpose();
+        (model, normal)
+    }
 }
 
 impl Default for Transform {

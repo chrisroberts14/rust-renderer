@@ -71,12 +71,11 @@ impl Renderer {
         lights: &[PointLight],
         framebuffer: &mut Framebuffer,
     ) {
-        let model = object.transform.matrix();
+        let (model, normal_matrix) = object.transform.matrices();
         let view = camera.view_matrix();
         let projection = camera.projection_matrix();
 
         let model_view = view * model;
-        let normal_matrix = model.inverse().unwrap().transpose();
 
         let width = framebuffer.width as i32;
         let height = framebuffer.height as i32;
