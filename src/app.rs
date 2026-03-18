@@ -180,6 +180,17 @@ impl ApplicationHandler for App {
                     self.cursor_grabbed = false;
                 }
             }
+            WindowEvent::PointerButton {
+                state: ElementState::Pressed,
+                ..
+            } if !self.cursor_grabbed => {
+                let window = self.window.unwrap();
+                window.set_cursor_visible(false);
+                if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+                    window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
+                }
+                self.cursor_grabbed = true;
+            }
             _ => (),
         }
     }
