@@ -117,7 +117,7 @@ impl Renderer {
             if clipped.is_empty() {
                 continue;
             }
-        
+
             let base_color = object.mesh.color_of(face_idx);
             let r = base_color[0] as f32;
             let g = base_color[1] as f32;
@@ -147,8 +147,7 @@ impl Renderer {
                         let px = x as f32 + 0.5;
                         let py = y as f32 + 0.5;
 
-                        let area = (p1.x - p0.x)*(p2.y - p0.y)
-                                - (p2.x - p0.x)*(p1.y - p0.y);
+                        let area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
 
                         if area <= 0.0 {
                             continue;

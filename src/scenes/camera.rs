@@ -56,7 +56,8 @@ impl Camera {
             yaw.sin() * pitch.cos(),
             -pitch.sin(),
             -yaw.cos() * pitch.cos(),
-        ).normalise()
+        )
+        .normalise()
     }
 
     pub fn right(&self) -> Vec3 {
@@ -66,9 +67,7 @@ impl Camera {
     }
 
     pub fn up(&self) -> Vec3 {
-        self.forward()
-            .cross(self.right())
-            .normalise()
+        self.forward().cross(self.right()).normalise()
     }
 
     pub fn process_mouse(&mut self, dx: f32, dy: f32) {

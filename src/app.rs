@@ -53,7 +53,9 @@ impl App {
                 self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
             }
             Key::Character(ch) if ch == "shift" => {
-                self.scene.camera.move_camera(self.scene.camera.up() * -0.05);
+                self.scene
+                    .camera
+                    .move_camera(self.scene.camera.up() * -0.05);
             }
             _ => {}
         }
@@ -87,7 +89,11 @@ impl ApplicationHandler for App {
         self.pixels = Some(pixels);
 
         window_ref.set_cursor_visible(false);
-        window_ref.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+        if window_ref.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+            window_ref
+                .set_cursor_grab(CursorGrabMode::Confined)
+                .unwrap();
+        }
 
         window_ref.request_redraw();
     }
@@ -102,12 +108,9 @@ impl ApplicationHandler for App {
         _device_id: Option<DeviceId>,
         event: DeviceEvent,
     ) {
-        match event {
-            DeviceEvent::PointerMotion { delta } => {
-                let (dx, dy) = delta;
-                self.scene.camera.process_mouse(dx as f32, dy as f32);
-            }
-            _ => {}
+        if let DeviceEvent::PointerMotion { delta } = event {
+            let (dx, dy) = delta;
+            self.scene.camera.process_mouse(dx as f32, dy as f32);
         }
     }
 
