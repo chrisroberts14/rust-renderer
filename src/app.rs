@@ -83,7 +83,7 @@ impl ApplicationHandler for App {
 
         let window = event_loop.create_window(attrs).unwrap();
 
-        // Leak the window to get a 'static reference
+        // Leak the window to get a static reference
         let window_ref: &'static dyn Window = Box::leak(window);
 
         let window_size = window_ref.surface_size();
