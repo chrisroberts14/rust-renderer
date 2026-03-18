@@ -66,6 +66,12 @@ impl Framebuffer {
         }
     }
 
+    /// Returns the pixel data as a flat byte slice.
+    /// Safe because AtomicU8 is guaranteed to have the same layout as u8.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.pixels.as_ptr() as *const u8, self.pixels.len()) }
+    }
+
     pub fn resize(&mut self, new_width: usize, new_height: usize) {
         self.width = new_width;
         self.height = new_height;
