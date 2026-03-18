@@ -64,6 +64,28 @@ fn clip_near(vertices: [Vert; 3], near: f32) -> Vec<[Vert; 3]> {
     }
 }
 
+/// Computes the Phong light multiplier [r, g, b] for a surface point.
+/// Returns [1.0; 3] when there are no lights (unlit rendering).
+fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[PointLight]) -> [f32; 3] {
+    if lights.is_empty() {
+        return [1.0; 3];
+    }
+    let mut diffuse_rgb = [0.0f32; 3];
+    let mut specular_rgb = [0.0f32; 3];
+    for light in lights.iter() {
+        let light_colour = light.colour_at(world_pos);
+        let light_dir = light.direction_to(world_pos);
+        let diffuse = light_dir.dot(normal).max(0.0);
+        let reflect = normal * (2.0 * normal.dot(light_dir)) - light_dir;
+        let specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
+        for i in 0..3 {
+            diffuse_rgb[i] += diffuse * light_colour[i];
+            specular_rgb[i] += specular * light_colour[i];
+        }
+    }
+    std::array::from_fn(|i| (AMBIENT + (1.0 - AMBIENT) * diffuse_rgb[i] + specular_rgb[i]).min(1.0))
+}
+
 impl Renderer {
     pub fn draw_object(
         object: &Object,
@@ -162,38 +184,7 @@ impl Renderer {
                                 let world_pos = v0_w * w0 + v1_w * w1 + v2_w * w2;
                                 let view_dir = (camera.position - world_pos).normalise();
 
-                                let mut diffuse_rgb = [0.0f32; 3];
-                                let mut specular_rgb = [0.0f32; 3];
-                                for light in lights.iter() {
-                                    let light_colour = light.colour_at(world_pos);
-                                    let light_dir = light.direction_to(world_pos);
-                                    let diffuse = light_dir.dot(normal).max(0.0);
-                                    let reflect =
-                                        normal * (2.0 * normal.dot(light_dir)) - light_dir;
-                                    let specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
-                                    for i in 0..3 {
-                                        diffuse_rgb[i] += diffuse * light_colour[i];
-                                        specular_rgb[i] += specular * light_colour[i];
-                                    }
-                                }
-                                let [lr, lg, lb] = if lights.is_empty() {
-                                    [1.0; 3]
-                                } else {
-                                    [
-                                        (AMBIENT
-                                            + (1.0 - AMBIENT) * diffuse_rgb[0]
-                                            + specular_rgb[0])
-                                            .min(1.0),
-                                        (AMBIENT
-                                            + (1.0 - AMBIENT) * diffuse_rgb[1]
-                                            + specular_rgb[1])
-                                            .min(1.0),
-                                        (AMBIENT
-                                            + (1.0 - AMBIENT) * diffuse_rgb[2]
-                                            + specular_rgb[2])
-                                            .min(1.0),
-                                    ]
-                                };
+                                let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights);
 
                                 framebuffer.set_pixel(
                                     ux,
