@@ -15,14 +15,6 @@ impl Transform {
         }
     }
 
-    pub fn with_position(pos: Vec3) -> Self {
-        Self {
-            position: pos,
-            rotation: Vec3::new(0.0, 0.0, 0.0),
-            scale: Vec3::new(1.0, 1.0, 1.0),
-        }
-    }
-
     pub fn matrix(&self) -> Mat4 {
         let translation = Mat4::translation(self.position.x, self.position.y, self.position.z);
 

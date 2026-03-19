@@ -23,19 +23,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    // Here we create the scene
-    // For now this consists of a teapot a monkey and 3 point lights of different colours
+    let monkey = Object::new(
+        ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?,
+        Transform::default(),
+    );
 
-    let scene_objects = vec![
-        Object::new(
-            ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?,
-            Transform::with_position(Vec3::new(0.0, 2.0, 0.0)),
-        ),
-        Object::new(
-            ObjLoader::load(Path::new("teapot.obj"), [255, 255, 255, 255])?,
-            Transform::with_position(Vec3::new(0.0, -2.0, 0.0)),
-        ),
-    ];
+    let scene_objects = vec![monkey];
 
     let scene_lights = vec![
         PointLight::new(Vec3::new(0.0, 0.0, 5.0), [1.0, 0.0, 0.0], 15.0),

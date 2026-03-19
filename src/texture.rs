@@ -1,5 +1,7 @@
-#[allow(dead_code)]
-struct Texture {
+use std::io;
+use std::path::Path;
+
+pub struct Texture {
     pub width: u32,
     pub height: u32,
     rgba: Vec<u8>,
@@ -13,6 +15,20 @@ impl Texture {
             height,
             rgba,
         }
+    }
+
+    pub fn load(path: &Path) -> io::Result<Self> {
+        let img = image::open(path)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+            .into_rgba8();
+        let width = img.width();
+        let height = img.height();
+        let rgba = img.into_raw();
+        Ok(Self {
+            width,
+            height,
+            rgba,
+        })
     }
 
     pub fn sample(&self, u: f32, v: f32) -> [u8; 4] {

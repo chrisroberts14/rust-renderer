@@ -1,6 +1,7 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
+use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
@@ -9,12 +10,13 @@ const AMBIENT: f32 = 0.15;
 const SHININESS: i32 = 32;
 pub struct Renderer;
 
-// A vertex bundle: (camera-space position, world-space position, world-space normal)
+// A vertex bundle: (camera-space position, world-space position, world-space normal, texture UV)
 #[derive(Clone, Copy)]
 struct Vert {
     cam: Vec3,
     world: Vec3,
     normal: Vec3,
+    uv: Vec2,
 }
 
 fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
@@ -22,6 +24,7 @@ fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
         cam: a.cam * (1.0 - t) + b.cam * t,
         world: a.world * (1.0 - t) + b.world * t,
         normal: a.normal * (1.0 - t) + b.normal * t,
+        uv: a.uv * (1.0 - t) + b.uv * t,
     }
 }
 
@@ -119,21 +122,32 @@ impl Renderer {
                 cam: (model_view * v.to_vec4()).to_vec3(),
                 world: (model * v.to_vec4()).to_vec3(),
                 normal: (normal_matrix * n.to_vec4()).to_vec3(),
+                uv: Vec2::new(0.0, 0.0),
             })
             .collect();
 
         for (face_idx, (i0, i1, i2)) in object.mesh.faces.iter().enumerate() {
-            let v0 = verts[*i0];
-            let v1 = verts[*i1];
-            let v2 = verts[*i2];
+            // Build per-face verts with correct UVs (UV indices differ from vertex indices)
+            let (uv_i0, uv_i1, uv_i2) = object
+                .mesh
+                .uv_faces
+                .get(face_idx)
+                .copied()
+                .unwrap_or((0, 0, 0));
+            let zero_uv = Vec2::new(0.0, 0.0);
+            let mut v0 = verts[*i0];
+            let mut v1 = verts[*i1];
+            let mut v2 = verts[*i2];
+            v0.uv = *object.mesh.uvs.get(uv_i0).unwrap_or(&zero_uv);
+            v1.uv = *object.mesh.uvs.get(uv_i1).unwrap_or(&zero_uv);
+            v2.uv = *object.mesh.uvs.get(uv_i2).unwrap_or(&zero_uv);
 
             let clipped = clip_near([v0, v1, v2], camera.near);
             if clipped.is_empty() {
                 continue;
             }
 
-            let [cr, cg, cb, ca] = object.mesh.color_of(face_idx);
-            let (r, g, b) = (cr as f32, cg as f32, cb as f32);
+            let face_color = object.mesh.color_of(face_idx);
 
             for [v0, v1, v2] in clipped {
                 let ((p0, z0), (p1, z1), (p2, z2)) = Triangle::new(v0.cam, v1.cam, v2.cam).project(
@@ -176,6 +190,23 @@ impl Renderer {
                                 let view_dir = (camera.position - world_pos).normalise();
 
                                 let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights);
+
+                                // Perspective-correct UV interpolation (use camera-space z, negate since cam.z is negative)
+                                let inv_z0 = -1.0 / v0.cam.z;
+                                let inv_z1 = -1.0 / v1.cam.z;
+                                let inv_z2 = -1.0 / v2.cam.z;
+                                let inv_z = w0 * inv_z0 + w1 * inv_z1 + w2 * inv_z2;
+                                let uv = (v0.uv * inv_z0 * w0
+                                    + v1.uv * inv_z1 * w1
+                                    + v2.uv * inv_z2 * w2)
+                                    / inv_z;
+
+                                let [cr, cg, cb, ca] = if let Some(tex) = &object.texture {
+                                    tex.sample(uv.x, uv.y)
+                                } else {
+                                    face_color
+                                };
+                                let (r, g, b) = (cr as f32, cg as f32, cb as f32);
 
                                 framebuffer.set_pixel(
                                     ux,
