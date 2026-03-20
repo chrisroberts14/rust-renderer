@@ -2,10 +2,12 @@ use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
 use crate::material::Material;
 use crate::maths::vec3::Vec3;
+use crate::renderer::{Renderer, TILE_SIZE, bin_triangles};
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
 use crate::texture::Texture;
-use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
+use crate::tile::make_tiles;
+use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -78,51 +80,86 @@ impl Scene {
     }
 
     pub fn render_objects(&mut self) {
+        let fb_width = self.framebuffer.width as f32;
+        let fb_height = self.framebuffer.height as f32;
+
+        // Geometry pass: transform, clip, project, and backface-cull all objects.
         let objects = self.objects.read().unwrap();
-        for object in objects.iter() {
-            Renderer::draw_object(
-                object,
+        let triangles: Vec<_> = objects
+            .iter()
+            .flat_map(|obj| Renderer::prepare_object(obj, &self.camera, fb_width, fb_height))
+            .collect();
+
+        if self.settings.wire_frame_mode {
+            Renderer::draw_wireframe(&triangles, &self.framebuffer);
+            return;
+        }
+
+        // Binning + rasterization pass.
+        let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
+        let bins = bin_triangles(&triangles, &tiles);
+        for (tile, tri_indices) in tiles.iter().zip(bins.iter()) {
+            Renderer::rasterize_tile(
+                tile,
+                tri_indices,
+                &triangles,
                 &self.camera,
                 &self.lights,
-                &mut self.framebuffer,
-                self.settings.wire_frame_mode,
+                &self.framebuffer,
             );
         }
     }
 
-    /// Render small box representations around the point lights for debugging purposes
-    /// In order to actually see it we need it to be lit without needing another light
+    /// Renders small box representations of each point light for debugging.
+    /// Light boxes are rendered unlit so their colour always matches the light colour.
     pub fn render_lights(&mut self) {
-        for light in self.lights.iter() {
-            // Convert the lights colour from [0.0, 1.0] to [0, 255] for the framebuffer
-            let colour = [
-                (light.colour[0] * 255.0) as u8,
-                (light.colour[1] * 255.0) as u8,
-                (light.colour[2] * 255.0) as u8,
-                255,
-            ];
+        let fb_width = self.framebuffer.width as f32;
+        let fb_height = self.framebuffer.height as f32;
 
-            let light_box = Object::new(
-                Cube::mesh(1.0),
-                Transform {
-                    position: light.position,
-                    rotation: Vec3::new(0.0, 0.0, 0.0),
-                    scale: Vec3::new(0.1, 0.1, 0.1),
-                },
-                Material::Color(colour),
-            );
-            Renderer::draw_object(
-                &light_box,
+        let triangles: Vec<_> = self
+            .lights
+            .iter()
+            .flat_map(|light| {
+                let colour = [
+                    (light.colour[0] * 255.0) as u8,
+                    (light.colour[1] * 255.0) as u8,
+                    (light.colour[2] * 255.0) as u8,
+                    255,
+                ];
+                let light_box = Object::new(
+                    Cube::mesh(1.0),
+                    Transform {
+                        position: light.position,
+                        rotation: Vec3::new(0.0, 0.0, 0.0),
+                        scale: Vec3::new(0.1, 0.1, 0.1),
+                    },
+                    Material::Color(colour),
+                );
+                Renderer::prepare_object(&light_box, &self.camera, fb_width, fb_height)
+            })
+            .collect();
+
+        if self.settings.wire_frame_mode {
+            Renderer::draw_wireframe(&triangles, &self.framebuffer);
+            return;
+        }
+
+        let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
+        let bins = bin_triangles(&triangles, &tiles);
+        for (tile, tri_indices) in tiles.iter().zip(bins.iter()) {
+            // Pass empty lights — light boxes should appear unlit.
+            Renderer::rasterize_tile(
+                tile,
+                tri_indices,
+                &triangles,
                 &self.camera,
                 &[],
-                &mut self.framebuffer,
-                self.settings.wire_frame_mode,
+                &self.framebuffer,
             );
         }
     }
 
     /// Helper method to render the whole scene
-    ///
     pub fn render_scene(&mut self) {
         self.framebuffer.clear([0, 0, 0, 255]);
         if let Some(skybox) = &self.skybox {

@@ -10,6 +10,7 @@ mod maths;
 mod renderer;
 mod scenes;
 mod texture;
+mod tile;
 
 use crate::geometry::obj_loader::ObjLoader;
 use crate::geometry::object::Object;
