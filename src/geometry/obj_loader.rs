@@ -9,10 +9,10 @@ use crate::maths::vec3::Vec3;
 pub struct ObjLoader;
 
 impl ObjLoader {
-    /// Load a .obj file into a Mesh.  All faces are given `color`.
+    /// Load a .obj file into a Mesh.
     /// Supports `v`, `vt`, `f` lines; face indices may be `v`, `v/vt`, `v//vn`, or `v/vt/vn`.
     /// Polygons with more than 3 vertices are fan-triangulated.
-    pub fn load(path: &Path, color: [u8; 4]) -> io::Result<Mesh> {
+    pub fn load(path: &Path) -> io::Result<Mesh> {
         let source = fs::read_to_string(path)?;
 
         let mut vertices: Vec<Vec3> = Vec::new();
@@ -85,7 +85,6 @@ impl ObjLoader {
             }
         }
 
-        let face_colors = vec![color; faces.len()];
-        Ok(Mesh::new(vertices, faces, face_colors, uvs, uv_faces))
+        Ok(Mesh::new(vertices, faces, uvs, uv_faces))
     }
 }

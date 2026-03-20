@@ -5,6 +5,7 @@ mod app;
 mod fps;
 mod framebuffer;
 mod geometry;
+mod material;
 mod maths;
 mod renderer;
 mod scenes;
@@ -13,6 +14,7 @@ mod texture;
 use crate::geometry::obj_loader::ObjLoader;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
+use crate::material::Material;
 use crate::maths::vec3::Vec3;
 use crate::scenes::pointlight::PointLight;
 use crate::scenes::scene::Scene;
@@ -25,8 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let monkey = Object::new(
-        ObjLoader::load(Path::new("monkey.obj"), [255, 255, 255, 255])?,
+        ObjLoader::load(Path::new("monkey.obj"))?,
         Transform::default(),
+        Material::Color([255, 255, 255, 255]),
     );
 
     let scene_objects = vec![monkey];

@@ -1,6 +1,7 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
+use crate::material::Material;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
@@ -127,6 +128,15 @@ impl Renderer {
             })
             .collect();
 
+        let get_uv = |i: usize| {
+            object
+                .mesh
+                .uvs
+                .get(i)
+                .copied()
+                .unwrap_or(Vec2::new(0.0, 0.0))
+        };
+
         for (face_idx, (i0, i1, i2)) in object.mesh.faces.iter().enumerate() {
             // Build per-face verts with correct UVs (UV indices differ from vertex indices)
             let (uv_i0, uv_i1, uv_i2) = object
@@ -135,20 +145,23 @@ impl Renderer {
                 .get(face_idx)
                 .copied()
                 .unwrap_or((0, 0, 0));
-            let zero_uv = Vec2::new(0.0, 0.0);
-            let mut v0 = verts[*i0];
-            let mut v1 = verts[*i1];
-            let mut v2 = verts[*i2];
-            v0.uv = *object.mesh.uvs.get(uv_i0).unwrap_or(&zero_uv);
-            v1.uv = *object.mesh.uvs.get(uv_i1).unwrap_or(&zero_uv);
-            v2.uv = *object.mesh.uvs.get(uv_i2).unwrap_or(&zero_uv);
+            let v0 = Vert {
+                uv: get_uv(uv_i0),
+                ..verts[*i0]
+            };
+            let v1 = Vert {
+                uv: get_uv(uv_i1),
+                ..verts[*i1]
+            };
+            let v2 = Vert {
+                uv: get_uv(uv_i2),
+                ..verts[*i2]
+            };
 
             let clipped = clip_near([v0, v1, v2], camera.near);
             if clipped.is_empty() {
                 continue;
             }
-
-            let face_color = object.mesh.color_of(face_idx);
 
             for [v0, v1, v2] in clipped {
                 let ((p0, z0), (p1, z1), (p2, z2)) = Triangle::new(v0.cam, v1.cam, v2.cam).project(
@@ -197,20 +210,20 @@ impl Renderer {
 
                                 let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights);
 
-                                // Perspective-correct UV interpolation (use camera-space z, negate since cam.z is negative)
-                                let inv_z0 = -1.0 / v0.cam.z;
-                                let inv_z1 = -1.0 / v1.cam.z;
-                                let inv_z2 = -1.0 / v2.cam.z;
-                                let inv_z = w0 * inv_z0 + w1 * inv_z1 + w2 * inv_z2;
-                                let uv = (v0.uv * inv_z0 * w0
-                                    + v1.uv * inv_z1 * w1
-                                    + v2.uv * inv_z2 * w2)
-                                    / inv_z;
-
-                                let [cr, cg, cb, ca] = if let Some(tex) = &object.texture {
-                                    tex.sample(uv.x, uv.y)
-                                } else {
-                                    face_color
+                                let [cr, cg, cb, ca] = match &object.material {
+                                    Material::Color(c) => *c,
+                                    // Perspective-correct UV interpolation (use camera-space z, negate since cam.z is negative)
+                                    Material::Texture(tex) => {
+                                        let inv_z0 = -1.0 / v0.cam.z;
+                                        let inv_z1 = -1.0 / v1.cam.z;
+                                        let inv_z2 = -1.0 / v2.cam.z;
+                                        let inv_z = w0 * inv_z0 + w1 * inv_z1 + w2 * inv_z2;
+                                        let uv = (v0.uv * inv_z0 * w0
+                                            + v1.uv * inv_z1 * w1
+                                            + v2.uv * inv_z2 * w2)
+                                            / inv_z;
+                                        tex.sample(uv.x, uv.y)
+                                    }
                                 };
                                 let (r, g, b) = (cr as f32, cg as f32, cb as f32);
 

@@ -4,7 +4,7 @@ use crate::maths::vec3::Vec3;
 pub struct Cube;
 
 impl Cube {
-    pub fn mesh(size: f32, colour: [u8; 4]) -> Mesh {
+    pub fn mesh(size: f32) -> Mesh {
         let s = size / 2.0;
 
         let vertices = vec![
@@ -43,15 +43,6 @@ impl Cube {
             (3, 7, 6),
         ];
 
-        let face_colours = vec![
-            colour, colour, // Front
-            colour, colour, // Back
-            colour, colour, // Left
-            colour, colour, // Right
-            colour, colour, // Bottom
-            colour, colour, // Top
-        ];
-
-        Mesh::new(vertices, faces, face_colours, vec![], vec![])
+        Mesh::new(vertices, faces, vec![], vec![])
     }
 }

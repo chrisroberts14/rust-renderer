@@ -1,5 +1,6 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
+use crate::material::Material;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
@@ -102,12 +103,13 @@ impl Scene {
             ];
 
             let light_box = Object::new(
-                Cube::mesh(1.0, colour),
+                Cube::mesh(1.0),
                 Transform {
                     position: light.position,
                     rotation: Vec3::new(0.0, 0.0, 0.0),
                     scale: Vec3::new(0.1, 0.1, 0.1),
                 },
+                Material::Color(colour),
             );
             Renderer::draw_object(
                 &light_box,

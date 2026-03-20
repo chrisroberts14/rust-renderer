@@ -1,21 +1,19 @@
-use std::sync::Arc;
-
 use crate::geometry::mesh::Mesh;
 use crate::geometry::transform::Transform;
-use crate::texture::Texture;
+use crate::material::Material;
 
 pub struct Object {
     pub mesh: Mesh,
     pub transform: Transform,
-    pub texture: Option<Arc<Texture>>,
+    pub material: Material,
 }
 
 impl Object {
-    pub fn new(mesh: Mesh, transform: Transform) -> Self {
+    pub fn new(mesh: Mesh, transform: Transform, material: Material) -> Self {
         Self {
             mesh,
             transform,
-            texture: None,
+            material,
         }
     }
 }

@@ -6,7 +6,6 @@ use crate::maths::vec3::Vec3;
 pub struct Mesh {
     pub vertices: Vec<Vec3>,
     pub faces: Vec<(usize, usize, usize)>,
-    pub face_colors: Vec<[u8; 4]>,
     pub normals: Vec<Vec3>,
     pub uvs: Vec<Vec2>,
     pub uv_faces: Vec<(usize, usize, usize)>,
@@ -16,7 +15,6 @@ impl Mesh {
     pub fn new(
         vertices: Vec<Vec3>,
         faces: Vec<(usize, usize, usize)>,
-        face_colors: Vec<[u8; 4]>,
         uvs: Vec<Vec2>,
         uv_faces: Vec<(usize, usize, usize)>,
     ) -> Self {
@@ -24,18 +22,10 @@ impl Mesh {
         Self {
             vertices,
             faces,
-            face_colors,
             normals,
             uvs,
             uv_faces,
         }
-    }
-
-    pub fn color_of(&self, face_index: usize) -> [u8; 4] {
-        self.face_colors
-            .get(face_index)
-            .copied()
-            .unwrap_or([255, 255, 255, 255])
     }
 
     fn compute_vertex_normals(vertices: &[Vec3], faces: &[(usize, usize, usize)]) -> Vec<Vec3> {

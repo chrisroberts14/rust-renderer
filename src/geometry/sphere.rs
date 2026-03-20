@@ -13,9 +13,6 @@ impl Sphere {
         let mut uvs = vec![];
         let mut faces = vec![];
         let mut uv_faces = vec![];
-        let mut face_colors = vec![];
-
-        let color = [180, 180, 220, 255];
 
         // Generate vertices and UVs together (same indexing)
         for stack in 0..=stacks {
@@ -50,13 +47,11 @@ impl Sphere {
                 // Each quad becomes 2 triangles (counter-clockwise winding)
                 faces.push((tl, tr, bl));
                 uv_faces.push((tl, tr, bl));
-                face_colors.push(color);
                 faces.push((tr, br, bl));
                 uv_faces.push((tr, br, bl));
-                face_colors.push(color);
             }
         }
 
-        Mesh::new(vertices, faces, face_colors, uvs, uv_faces)
+        Mesh::new(vertices, faces, uvs, uv_faces)
     }
 }
