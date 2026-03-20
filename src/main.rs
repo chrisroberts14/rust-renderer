@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
-    scene.skybox = Some(Texture::load(Path::new("ticknock_04_4k.exr"))?);
+    scene.skybox = Texture::load(Path::new("test.png")).ok();
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 
