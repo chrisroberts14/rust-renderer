@@ -62,12 +62,20 @@ impl Framebuffer {
         }
         let idx = y * self.width + x;
         let depth_bits = depth.to_bits();
-        let current_depth_bits = self.depth[idx].load(std::sync::atomic::Ordering::Relaxed);
-        if depth_bits < current_depth_bits {
-            self.depth[idx].store(depth_bits, std::sync::atomic::Ordering::Relaxed);
-            true
-        } else {
-            false
+        let mut current = self.depth[idx].load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            if depth_bits >= current {
+                return false;
+            }
+            match self.depth[idx].compare_exchange_weak(
+                current,
+                depth_bits,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(actual) => current = actual,
+            }
         }
     }
 
