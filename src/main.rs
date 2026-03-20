@@ -16,6 +16,7 @@ use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::pointlight::PointLight;
 use crate::scenes::scene::Scene;
+use crate::texture::Texture;
 use app::App;
 use std::path::Path;
 
@@ -36,7 +37,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         PointLight::new(Vec3::new(-5.0, 0.0, 0.0), [0.0, 0.0, 1.0], 15.0),
     ];
 
-    let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
+    let mut scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
+
+    scene.skybox = Some(Texture::load(Path::new("ticknock_04_4k.exr"))?);
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 

@@ -1,4 +1,7 @@
 use crate::geometry::triangle::Triangle;
+use crate::maths::vec3::Vec3;
+use crate::scenes::camera::Camera;
+use crate::texture::Texture;
 use std::sync::atomic::{AtomicU8, AtomicU32};
 
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
@@ -129,5 +132,33 @@ impl Framebuffer {
         self.draw_line(p0.x as i32, p0.y as i32, p1.x as i32, p1.y as i32);
         self.draw_line(p1.x as i32, p1.y as i32, p2.x as i32, p2.y as i32);
         self.draw_line(p2.x as i32, p2.y as i32, p0.x as i32, p0.y as i32);
+    }
+
+    /// Draw the skybox infinitely far away
+    pub fn draw_skybox(&self, texture: &Texture, camera: &Camera) {
+        let tan_half_fov = (camera.fov / 2.0).tan();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let ndc_x = (x as f32 + 0.5) / self.width as f32 * 2.0 - 1.0;
+                let ndc_y = 1.0 - (y as f32 + 0.5) / self.height as f32 * 2.0;
+
+                let ray_x = ndc_x * camera.aspect_ratio * tan_half_fov;
+                let ray_y = ndc_y * tan_half_fov;
+
+                // Build view-space ray and rotate into world space using camera axes
+                let view_ray = Vec3::new(ray_x, ray_y, -1.0).normalise();
+                let world_ray = (camera.right() * view_ray.x
+                    + camera.up() * view_ray.y
+                    + camera.forward() * (-view_ray.z))
+                    .normalise();
+
+                // Convert world direction to equirectangular UV
+                let u = world_ray.z.atan2(world_ray.x) / (2.0 * std::f32::consts::PI) + 0.5;
+                let v = 0.5 - world_ray.y.clamp(-1.0, 1.0).asin() / std::f32::consts::PI;
+
+                let color = texture.sample(u, v);
+                self.set_pixel(x, y, color);
+            }
+        }
     }
 }

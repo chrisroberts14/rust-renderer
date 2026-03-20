@@ -3,6 +3,7 @@ use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
+use crate::texture::Texture;
 use crate::{framebuffer::Framebuffer, geometry::object::Object, renderer::Renderer};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -37,6 +38,7 @@ pub struct Scene {
     pub camera: Camera,
     pub lights: Vec<PointLight>,
     pub settings: SceneSettings,
+    pub skybox: Option<Texture>,
 }
 
 impl Scene {
@@ -47,6 +49,7 @@ impl Scene {
             camera: Camera::new(width, height),
             lights,
             settings: SceneSettings::new(),
+            skybox: None,
         }
     }
 
@@ -120,6 +123,9 @@ impl Scene {
     ///
     pub fn render_scene(&mut self) {
         self.framebuffer.clear([0, 0, 0, 255]);
+        if let Some(skybox) = &self.skybox {
+            self.framebuffer.draw_skybox(skybox, &self.camera);
+        }
         self.render_objects();
         if self.settings.render_lights {
             self.render_lights();
