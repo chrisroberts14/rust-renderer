@@ -3,14 +3,14 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::texture::Texture;
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicU8, AtomicU32};
+use std::sync::atomic::AtomicU32;
 
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
 #[derive(Default)]
 pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<AtomicU8>,
+    pub pixels: Vec<AtomicU32>,
     pub depth: Vec<AtomicU32>,
 }
 
@@ -20,7 +20,7 @@ impl Framebuffer {
         Self {
             width,
             height,
-            pixels: (0..width * height * 4).map(|_| AtomicU8::new(0)).collect(),
+            pixels: (0..width * height).map(|_| AtomicU32::new(0)).collect(),
             depth: (0..width * height)
                 .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
                 .collect(),
@@ -32,21 +32,18 @@ impl Framebuffer {
         if x >= self.width || y >= self.height {
             return; // silently ignore out-of-bounds
         }
-        let idx = (y * self.width + x) * 4;
-        self.pixels[idx..idx + 4]
-            .iter()
-            .zip(color.iter())
-            .for_each(|(p, c)| {
-                p.store(*c, std::sync::atomic::Ordering::Relaxed);
-            });
+        let idx = y * self.width + x;
+        self.pixels[idx].store(
+            u32::from_ne_bytes(color),
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     /// Clear the framebuffer with a given color [R,G,B,A]
     pub fn clear(&self, color: [u8; 4]) {
-        self.pixels.chunks_exact(4).for_each(|chunk| {
-            chunk.iter().zip(color.iter()).for_each(|(p, c)| {
-                p.store(*c, std::sync::atomic::Ordering::Relaxed);
-            })
+        let packed = u32::from_ne_bytes(color);
+        self.pixels.iter().for_each(|p| {
+            p.store(packed, std::sync::atomic::Ordering::Relaxed);
         });
         self.depth.iter().for_each(|d| {
             d.store(
@@ -80,16 +77,18 @@ impl Framebuffer {
     }
 
     /// Returns the pixel data as a flat byte slice.
-    /// Safe because AtomicU8 is guaranteed to have the same layout as u8.
+    /// Safe because AtomicU32 has the same layout as u32, and we pack pixels as from_ne_bytes.
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.pixels.as_ptr() as *const u8, self.pixels.len()) }
+        unsafe {
+            std::slice::from_raw_parts(self.pixels.as_ptr() as *const u8, self.pixels.len() * 4)
+        }
     }
 
     pub fn resize(&mut self, new_width: usize, new_height: usize) {
         self.width = new_width;
         self.height = new_height;
-        self.pixels = (0..new_width * new_height * 4)
-            .map(|_| AtomicU8::new(0))
+        self.pixels = (0..new_width * new_height)
+            .map(|_| AtomicU32::new(0))
             .collect();
         self.depth = (0..new_width * new_height)
             .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
