@@ -1,3 +1,4 @@
+use crate::geometry::triangle::Triangle;
 use std::sync::atomic::{AtomicU8, AtomicU32};
 
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
@@ -81,5 +82,52 @@ impl Framebuffer {
         self.depth = (0..new_width * new_height)
             .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
             .collect();
+    }
+
+    pub fn draw_line(&self, x0: i32, y0: i32, x1: i32, y1: i32) {
+        let mut x0 = x0;
+        let mut y0 = y0;
+        let mut x1 = x1;
+        let mut y1 = y1;
+
+        let steep = (y1 - y0).abs() > (x1 - x0).abs();
+        if steep {
+            std::mem::swap(&mut x0, &mut y0);
+            std::mem::swap(&mut x1, &mut y1);
+        }
+        if x0 > x1 {
+            std::mem::swap(&mut x0, &mut x1);
+            std::mem::swap(&mut y0, &mut y1);
+        }
+
+        let dx = x1 - x0;
+        let dy = (y1 - y0).abs();
+        let y_step = if y0 < y1 { 1 } else { -1 };
+
+        let mut error = dx / 2;
+        let mut y = y0;
+
+        for x in x0..=x1 {
+            if steep {
+                self.set_pixel(y as usize, x as usize, [255, 255, 255, 255]);
+            } else {
+                self.set_pixel(x as usize, y as usize, [255, 255, 255, 255]);
+            }
+            error -= dy;
+            if error < 0 {
+                y += y_step;
+                error += dx;
+            }
+        }
+    }
+
+    pub fn draw_triangle_wireframe(&self, triangle: &Triangle) {
+        let p0 = triangle.v0;
+        let p1 = triangle.v1;
+        let p2 = triangle.v2;
+
+        self.draw_line(p0.x as i32, p0.y as i32, p1.x as i32, p1.y as i32);
+        self.draw_line(p1.x as i32, p1.y as i32, p2.x as i32, p2.y as i32);
+        self.draw_line(p2.x as i32, p2.y as i32, p0.x as i32, p0.y as i32);
     }
 }

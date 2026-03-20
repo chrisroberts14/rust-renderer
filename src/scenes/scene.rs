@@ -9,11 +9,34 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
+pub struct SceneSettings {
+    pub render_lights: bool,
+    pub wire_frame_mode: bool,
+}
+
+impl SceneSettings {
+    pub fn new() -> Self {
+        Self {
+            render_lights: false,
+            wire_frame_mode: false,
+        }
+    }
+
+    pub fn toggle_render_lights(&mut self) {
+        self.render_lights = !self.render_lights;
+    }
+
+    pub fn toggle_wire_frame_mode(&mut self) {
+        self.wire_frame_mode = !self.wire_frame_mode;
+    }
+}
+
 pub struct Scene {
     pub objects: Arc<RwLock<Vec<Object>>>,
     pub framebuffer: Framebuffer,
     pub camera: Camera,
     pub lights: Vec<PointLight>,
+    pub settings: SceneSettings,
 }
 
 impl Scene {
@@ -23,6 +46,7 @@ impl Scene {
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
             lights,
+            settings: SceneSettings::new(),
         }
     }
 
@@ -52,7 +76,13 @@ impl Scene {
     pub fn render_objects(&mut self) {
         let objects = self.objects.read().unwrap();
         for object in objects.iter() {
-            Renderer::draw_object(object, &self.camera, &self.lights, &mut self.framebuffer);
+            Renderer::draw_object(
+                object,
+                &self.camera,
+                &self.lights,
+                &mut self.framebuffer,
+                self.settings.wire_frame_mode,
+            );
         }
     }
 
@@ -76,7 +106,23 @@ impl Scene {
                     scale: Vec3::new(0.1, 0.1, 0.1),
                 },
             );
-            Renderer::draw_object(&light_box, &self.camera, &[], &mut self.framebuffer);
+            Renderer::draw_object(
+                &light_box,
+                &self.camera,
+                &[],
+                &mut self.framebuffer,
+                self.settings.wire_frame_mode,
+            );
+        }
+    }
+
+    /// Helper method to render the whole scene
+    ///
+    pub fn render_scene(&mut self) {
+        self.framebuffer.clear([0, 0, 0, 255]);
+        self.render_objects();
+        if self.settings.render_lights {
+            self.render_lights();
         }
     }
 }

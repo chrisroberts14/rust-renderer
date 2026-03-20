@@ -54,6 +54,12 @@ impl App {
             Key::Character(ch) if ch == " " => {
                 self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
             }
+            Key::Character(ch) if ch == "m" => {
+                self.scene.settings.toggle_wire_frame_mode();
+            }
+            Key::Character(ch) if ch == "l" => {
+                self.scene.settings.toggle_render_lights();
+            }
             Key::Named(NamedKey::Shift) => {
                 self.scene
                     .camera
@@ -128,11 +134,7 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                // Clear the current framebuffer
-                self.scene.framebuffer.clear([0, 0, 0, 255]);
-
-                self.scene.render_objects();
-                self.scene.render_lights();
+                self.scene.render_scene();
                 self.fps_counter.tick(&mut self.scene.framebuffer);
 
                 let pixels = self.pixels.as_mut().unwrap();

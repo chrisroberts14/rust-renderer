@@ -103,6 +103,7 @@ impl Renderer {
         camera: &Camera,
         lights: &[PointLight],
         framebuffer: &mut Framebuffer,
+        wire_frame_mode: bool,
     ) {
         let (model, normal_matrix) = object.transform.matrices();
         let view = camera.view_matrix();
@@ -161,6 +162,11 @@ impl Renderer {
                     Vec3::new(p1.x, p1.y, 0.0),
                     Vec3::new(p2.x, p2.y, 0.0),
                 );
+
+                if wire_frame_mode {
+                    framebuffer.draw_triangle_wireframe(&screen_tri);
+                    continue;
+                }
 
                 let (min, max) = screen_tri.bounding_box();
                 let min_x = (min.x.floor() as i32).max(0);

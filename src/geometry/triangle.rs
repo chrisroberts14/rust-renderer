@@ -4,9 +4,9 @@ use crate::maths::vec3::Vec3;
 use crate::maths::vec4::Vec4;
 
 pub(crate) struct Triangle {
-    v0: Vec3,
-    v1: Vec3,
-    v2: Vec3,
+    pub(crate) v0: Vec3,
+    pub(crate) v1: Vec3,
+    pub(crate) v2: Vec3,
 }
 
 impl Triangle {
