@@ -106,6 +106,8 @@ impl Renderer {
         framebuffer: &mut Framebuffer,
         wire_frame_mode: bool,
     ) {
+        // Compute the model matrix and its inverse-transpose (for correct normal transformation
+        // under non-uniform scaling), plus the view and projection matrices.
         let (model, normal_matrix) = object.transform.matrices();
         let view = camera.view_matrix();
         let projection = camera.projection_matrix();
@@ -115,6 +117,9 @@ impl Renderer {
         let width = framebuffer.width as i32;
         let height = framebuffer.height as i32;
 
+        // Transform every vertex into camera space and world space once up front.
+        // UVs are left as zero here because UV indices can differ from vertex indices
+        // in OBJ files — they are patched per-face below.
         let verts: Vec<Vert> = object
             .mesh
             .vertices
@@ -158,18 +163,22 @@ impl Renderer {
                 ..verts[*i2]
             };
 
+            // Clip against the near plane. This may produce 0, 1, or 2 triangles.
             let clipped = clip_near([v0, v1, v2], camera.near);
             if clipped.is_empty() {
                 continue;
             }
 
             for [v0, v1, v2] in clipped {
+                // Project camera-space positions to 2D screen coordinates.
+                // z values are NDC depth, kept for interpolation later.
                 let ((p0, z0), (p1, z1), (p2, z2)) = Triangle::new(v0.cam, v1.cam, v2.cam).project(
                     projection,
                     width as f32,
                     height as f32,
                 );
 
+                // Screen-space triangle used for bounding box and point containment tests.
                 let screen_tri = Triangle::new(
                     Vec3::new(p0.x, p0.y, 0.0),
                     Vec3::new(p1.x, p1.y, 0.0),
@@ -181,28 +190,34 @@ impl Renderer {
                     continue;
                 }
 
+                // Clamp the rasterization bounds to the screen.
                 let (min, max) = screen_tri.bounding_box();
                 let min_x = (min.x.floor() as i32).max(0);
                 let max_x = (max.x.ceil() as i32).min(width - 1);
                 let min_y = (min.y.floor() as i32).max(0);
                 let max_y = (max.y.ceil() as i32).min(height - 1);
 
+                // Signed area of the screen-space triangle. Negative means back-facing
+                // (winding reversed after projection) so we skip it — backface culling.
                 let area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
-
                 if area <= 0.0 {
                     continue;
                 }
+
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
+                        // Test pixel centre against the triangle.
                         let px = x as f32 + 0.5;
                         let py = y as f32 + 0.5;
 
                         if let Some((w0, w1, w2)) = screen_tri.contains_point(px, py) {
+                            // Interpolate depth and run the depth test before doing any shading work.
                             let depth = w0 * z0 + w1 * z1 + w2 * z2;
                             let ux = x as usize;
                             let uy = y as usize;
 
                             if framebuffer.test_and_set_depth(ux, uy, depth) {
+                                // Interpolate vertex attributes across the triangle.
                                 let normal =
                                     (v0.normal * w0 + v1.normal * w1 + v2.normal * w2).normalise();
                                 let world_pos = v0.world * w0 + v1.world * w1 + v2.world * w2;
@@ -212,7 +227,9 @@ impl Renderer {
 
                                 let [cr, cg, cb, ca] = match &object.material {
                                     Material::Color(c) => *c,
-                                    // Perspective-correct UV interpolation (use camera-space z, negate since cam.z is negative)
+                                    // Perspective-correct UV interpolation: divide UV by camera-space z
+                                    // (negated since cam.z is negative for visible geometry) before
+                                    // interpolating, then divide out the 1/z factor afterwards.
                                     Material::Texture(tex) => {
                                         let inv_z0 = -1.0 / v0.cam.z;
                                         let inv_z1 = -1.0 / v1.cam.z;
