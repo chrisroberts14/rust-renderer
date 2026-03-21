@@ -93,7 +93,16 @@ impl Scene {
 
         let triangles: Vec<_> = objects
             .iter()
-            .flat_map(|obj| Renderer::prepare_object(obj, fb_width, fb_height, view, projection, self.camera.near))
+            .flat_map(|obj| {
+                Renderer::prepare_object(
+                    obj,
+                    fb_width,
+                    fb_height,
+                    view,
+                    projection,
+                    self.camera.near,
+                )
+            })
             .collect();
 
         if self.settings.wire_frame_mode {
@@ -104,9 +113,19 @@ impl Scene {
         // Binning + rasterization pass.
         let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
         let bins = bin_triangles(&triangles, &tiles);
-        tiles.par_iter().zip(bins.par_iter()).for_each(|(tile, tri_indices)| {
-                Renderer::rasterize_tile(tile, tri_indices, &triangles, &self.camera, &self.lights, &self.framebuffer);
-        });
+        tiles
+            .par_iter()
+            .zip(bins.par_iter())
+            .for_each(|(tile, tri_indices)| {
+                Renderer::rasterize_tile(
+                    tile,
+                    tri_indices,
+                    &triangles,
+                    &self.camera,
+                    &self.lights,
+                    &self.framebuffer,
+                );
+            });
     }
 
     /// Renders small box representations of each point light for debugging.
@@ -136,7 +155,14 @@ impl Scene {
                     },
                     Material::Color(colour),
                 );
-                Renderer::prepare_object(&light_box, fb_width, fb_height, view, projection, self.camera.near)
+                Renderer::prepare_object(
+                    &light_box,
+                    fb_width,
+                    fb_height,
+                    view,
+                    projection,
+                    self.camera.near,
+                )
             })
             .collect();
 

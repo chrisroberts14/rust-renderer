@@ -148,7 +148,7 @@ impl Renderer {
         height: f32,
         camera_view_mat: Mat4,
         camera_projection_mat: Mat4,
-        camera_near: f32
+        camera_near: f32,
     ) -> Vec<PreparedTriangle> {
         // Compute the model matrix and its inverse-transpose (for correct normal transformation
         // under non-uniform scaling)
@@ -207,8 +207,11 @@ impl Renderer {
             for [v0, v1, v2] in clip_near([v0, v1, v2], camera_near) {
                 // Project camera-space positions to 2D screen coordinates.
                 // z values are NDC depth, kept for depth interpolation during rasterization.
-                let ((p0, z0), (p1, z1), (p2, z2)) =
-                    Triangle::new(v0.cam, v1.cam, v2.cam).project(camera_projection_mat, width, height);
+                let ((p0, z0), (p1, z1), (p2, z2)) = Triangle::new(v0.cam, v1.cam, v2.cam).project(
+                    camera_projection_mat,
+                    width,
+                    height,
+                );
 
                 // Signed area of the screen-space triangle. Negative means back-facing
                 // (winding reversed after projection) so we skip it — backface culling.

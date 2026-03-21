@@ -45,5 +45,11 @@ fn bench_render_complex_scene_wire_frame(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_render_simple_scene, bench_render_complex_scene, bench_render_simple_scene_wire_frame, bench_render_complex_scene_wire_frame);
+criterion_group!(
+    benches,
+    bench_render_simple_scene,
+    bench_render_complex_scene,
+    bench_render_simple_scene_wire_frame,
+    bench_render_complex_scene_wire_frame
+);
 criterion_main!(benches);

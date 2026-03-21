@@ -23,15 +23,13 @@ use std::thread::JoinHandle;
 /// Creates a simple scene with one monkey and 3 lights
 ///
 /// Returns a scene a handle for the object update thread and a bool for if that thread is running
-pub fn create_simple_scene() -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>>
-{
-    let scene_objects = vec![
-        Object::new(
-            ObjLoader::load(Path::new("monkey.obj"))?,
-            Transform::default(),
-            Material::Color([255, 255, 255, 255]),
-        ),
-    ];
+pub fn create_simple_scene()
+-> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
+    let scene_objects = vec![Object::new(
+        ObjLoader::load(Path::new("monkey.obj"))?,
+        Transform::default(),
+        Material::Color([255, 255, 255, 255]),
+    )];
 
     let scene_lights = vec![
         PointLight::new(Vec3::new(0.0, 0.0, 5.0), [1.0, 0.0, 0.0], 15.0),
@@ -48,10 +46,9 @@ pub fn create_simple_scene() -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>),
     Ok((scene, update_handle, update_running))
 }
 
-
 /// Creates a "complex" scene which involves 4 monkeys and 3 lights
-pub fn create_complex_scene() -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>>
-{
+pub fn create_complex_scene()
+-> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
     let scene_objects = vec![
         Object::new(
             ObjLoader::load(Path::new("monkey.obj"))?,
@@ -60,23 +57,17 @@ pub fn create_complex_scene() -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>)
         ),
         Object::new(
             ObjLoader::load(Path::new("monkey.obj"))?,
-            Transform::in_position(
-                Vec3::new(0.0, 5.0, 0.0)
-            ),
+            Transform::in_position(Vec3::new(0.0, 5.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
             ObjLoader::load(Path::new("monkey.obj"))?,
-            Transform::in_position(
-                Vec3::new(5.0, 0.0, 0.0)
-            ),
+            Transform::in_position(Vec3::new(5.0, 0.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
             ObjLoader::load(Path::new("monkey.obj"))?,
-            Transform::in_position(
-                Vec3::new(0.0, 0.0, -5.0)
-            ),
+            Transform::in_position(Vec3::new(0.0, 0.0, -5.0)),
             Material::Color([255, 255, 255, 255]),
         ),
     ];
