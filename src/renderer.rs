@@ -1,7 +1,7 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
-use crate::material::Material;
+use crate::scenes::material::Material;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
@@ -229,8 +229,6 @@ impl Renderer {
     }
 
     /// Rasterizes all triangles assigned to a tile, clamping pixel iteration to the tile bounds.
-    /// Takes `&Framebuffer` (not `&mut`) because all framebuffer writes go through atomics —
-    /// this is what will allow tiles to run in parallel later.
     pub(crate) fn rasterize_tile(
         tile: &Tile,
         triangle_indices: &[usize],

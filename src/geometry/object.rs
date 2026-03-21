@@ -1,6 +1,6 @@
 use crate::geometry::mesh::Mesh;
 use crate::geometry::transform::Transform;
-use crate::material::Material;
+use crate::scenes::material::Material;
 
 pub struct Object {
     pub mesh: Mesh,

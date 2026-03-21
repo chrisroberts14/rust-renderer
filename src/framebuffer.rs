@@ -1,7 +1,7 @@
 use crate::geometry::triangle::Triangle;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
-use crate::texture::Texture;
+use crate::scenes::texture::Texture;
 use rayon::prelude::*;
 use std::sync::atomic::AtomicU32;
 

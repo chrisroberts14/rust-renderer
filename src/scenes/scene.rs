@@ -1,11 +1,11 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
-use crate::material::Material;
+use crate::scenes::material::Material;
 use crate::maths::vec3::Vec3;
 use crate::renderer::{Renderer, TILE_SIZE, bin_triangles};
 use crate::scenes::camera::Camera;
 use crate::scenes::pointlight::PointLight;
-use crate::texture::Texture;
+use crate::scenes::texture::Texture;
 use crate::tile::make_tiles;
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
