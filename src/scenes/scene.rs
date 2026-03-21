@@ -161,7 +161,7 @@ impl Scene {
 
     /// Helper method to render the whole scene
     pub fn render_scene(&mut self) {
-        self.framebuffer.clear([0, 0, 0, 255]);
+        self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
         }

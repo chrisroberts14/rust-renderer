@@ -3,7 +3,7 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::texture::Texture;
 use rayon::prelude::*;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
 #[derive(Default)]
@@ -39,18 +39,15 @@ impl Framebuffer {
         );
     }
 
-    /// Clear the framebuffer with a given color [R,G,B,A]
-    pub fn clear(&self, color: [u8; 4]) {
-        let packed = u32::from_ne_bytes(color);
-        self.pixels.iter().for_each(|p| {
-            p.store(packed, std::sync::atomic::Ordering::Relaxed);
-        });
-        self.depth.iter().for_each(|d| {
-            d.store(
-                f32::INFINITY.to_bits(),
-                std::sync::atomic::Ordering::Relaxed,
-            )
-        });
+    /// Clear the framebuffer to be all black
+    pub fn clear(&self) {
+        let packed = u32::from_ne_bytes([0, 0, 0, 255]);
+        for p in &self.pixels {
+            p.store(packed, Ordering::Relaxed);
+        }
+        for d in &self.depth {
+            d.store(f32::INFINITY.to_bits(), Ordering::Relaxed);
+        }
     }
 
     pub fn test_and_set_depth(&self, x: usize, y: usize, depth: f32) -> bool {

@@ -134,15 +134,18 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
+                // Render the whole scene and when that is done tick the fps counter
                 self.scene.render_scene();
                 self.fps_counter.tick(&mut self.scene.framebuffer);
 
+                // Copy the newly generated frame into the pixel array which is what will be put on the screen
                 let pixels = self.pixels.as_mut().unwrap();
                 pixels
                     .frame_mut()
                     .copy_from_slice(self.scene.framebuffer.as_bytes());
-
                 pixels.render().unwrap();
+
+                // Render the next frame
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
