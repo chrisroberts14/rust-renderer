@@ -151,7 +151,7 @@ impl Renderer {
         camera_near: f32
     ) -> Vec<PreparedTriangle> {
         // Compute the model matrix and its inverse-transpose (for correct normal transformation
-        // under non-uniform scaling), plus the view and projection matrices.
+        // under non-uniform scaling)
         let (model, normal_matrix) = object.transform.matrices();
         let model_view = camera_view_mat * model;
 

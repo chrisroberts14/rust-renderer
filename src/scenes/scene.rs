@@ -13,6 +13,8 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
+use rayon::prelude::*;
+
 pub struct SceneSettings {
     pub render_lights: bool,
     pub wire_frame_mode: bool,
@@ -102,16 +104,9 @@ impl Scene {
         // Binning + rasterization pass.
         let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
         let bins = bin_triangles(&triangles, &tiles);
-        for (tile, tri_indices) in tiles.iter().zip(bins.iter()) {
-            Renderer::rasterize_tile(
-                tile,
-                tri_indices,
-                &triangles,
-                &self.camera,
-                &self.lights,
-                &self.framebuffer,
-            );
-        }
+        tiles.par_iter().zip(bins.par_iter()).for_each(|(tile, tri_indices)| {
+                Renderer::rasterize_tile(tile, tri_indices, &triangles, &self.camera, &self.lights, &self.framebuffer);
+        });
     }
 
     /// Renders small box representations of each point light for debugging.
