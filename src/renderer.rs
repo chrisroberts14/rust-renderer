@@ -1,6 +1,7 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
+use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
@@ -143,16 +144,16 @@ impl Renderer {
     /// Returns a flat list of screen-ready triangles with no framebuffer writes.
     pub fn prepare_object(
         object: &Object,
-        camera: &Camera,
         width: f32,
         height: f32,
+        camera_view_mat: Mat4,
+        camera_projection_mat: Mat4,
+        camera_near: f32
     ) -> Vec<PreparedTriangle> {
         // Compute the model matrix and its inverse-transpose (for correct normal transformation
         // under non-uniform scaling), plus the view and projection matrices.
         let (model, normal_matrix) = object.transform.matrices();
-        let view = camera.view_matrix();
-        let projection = camera.projection_matrix();
-        let model_view = view * model;
+        let model_view = camera_view_mat * model;
 
         // Transform every vertex into camera space and world space once up front.
         // UVs are left as zero here because UV indices can differ from vertex indices
@@ -203,11 +204,11 @@ impl Renderer {
             };
 
             // Clip against the near plane. This may produce 0, 1, or 2 triangles.
-            for [v0, v1, v2] in clip_near([v0, v1, v2], camera.near) {
+            for [v0, v1, v2] in clip_near([v0, v1, v2], camera_near) {
                 // Project camera-space positions to 2D screen coordinates.
                 // z values are NDC depth, kept for depth interpolation during rasterization.
                 let ((p0, z0), (p1, z1), (p2, z2)) =
-                    Triangle::new(v0.cam, v1.cam, v2.cam).project(projection, width, height);
+                    Triangle::new(v0.cam, v1.cam, v2.cam).project(camera_projection_mat, width, height);
 
                 // Signed area of the screen-space triangle. Negative means back-facing
                 // (winding reversed after projection) so we skip it — backface culling.

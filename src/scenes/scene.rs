@@ -85,9 +85,13 @@ impl Scene {
 
         // Geometry pass: transform, clip, project, and backface-cull all objects.
         let objects = self.objects.read().unwrap();
+
+        let view = self.camera.view_matrix();
+        let projection = self.camera.projection_matrix();
+
         let triangles: Vec<_> = objects
             .iter()
-            .flat_map(|obj| Renderer::prepare_object(obj, &self.camera, fb_width, fb_height))
+            .flat_map(|obj| Renderer::prepare_object(obj, fb_width, fb_height, view, projection, self.camera.near))
             .collect();
 
         if self.settings.wire_frame_mode {
@@ -115,6 +119,8 @@ impl Scene {
     pub fn render_lights(&mut self) {
         let fb_width = self.framebuffer.width as f32;
         let fb_height = self.framebuffer.height as f32;
+        let view = self.camera.view_matrix();
+        let projection = self.camera.projection_matrix();
 
         let triangles: Vec<_> = self
             .lights
@@ -135,7 +141,7 @@ impl Scene {
                     },
                     Material::Color(colour),
                 );
-                Renderer::prepare_object(&light_box, &self.camera, fb_width, fb_height)
+                Renderer::prepare_object(&light_box, fb_width, fb_height, view, projection, self.camera.near)
             })
             .collect();
 
