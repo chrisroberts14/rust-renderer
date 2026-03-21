@@ -2,6 +2,7 @@ use winit::event_loop::ControlFlow;
 use winit::event_loop::EventLoop;
 
 mod app;
+mod cache;
 mod fps;
 mod framebuffer;
 mod geometry;
@@ -9,13 +10,12 @@ mod maths;
 mod renderer;
 mod scenes;
 mod tile;
-mod cache;
 
 use crate::geometry::obj_loader::ObjLoader;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
-use crate::scenes::material::Material;
 use crate::maths::vec3::Vec3;
+use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
 use crate::scenes::scene::Scene;
 use crate::scenes::texture::Texture;

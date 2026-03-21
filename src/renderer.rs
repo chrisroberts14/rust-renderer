@@ -1,10 +1,10 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
-use crate::scenes::material::Material;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
+use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
 use crate::tile::Tile;
 
