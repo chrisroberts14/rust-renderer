@@ -98,15 +98,29 @@ fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[PointLight]) -
     for light in lights.iter() {
         let light_colour = light.colour_at(world_pos);
         let light_dir = light.direction_to(world_pos);
-        let diffuse = light_dir.dot(normal).max(0.0);
-        let reflect = normal * (2.0 * normal.dot(light_dir)) - light_dir;
-        let specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
+
+        // Calculate the normal and light dot product once
+        let ndotl = normal.dot(light_dir).max(0.0);
+        let diffuse = ndotl;
+
+        // If the light is behind the surface specular is guaranteed to be 0
+        let mut specular = 0.0;
+        if ndotl > 0.0 {
+            let reflect = normal * (2.0 * ndotl) - light_dir;
+            specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
+        }
+
         for i in 0..3 {
             diffuse_rgb[i] += diffuse * light_colour[i];
             specular_rgb[i] += specular * light_colour[i];
         }
     }
-    std::array::from_fn(|i| (AMBIENT + (1.0 - AMBIENT) * diffuse_rgb[i] + specular_rgb[i]).min(1.0))
+    let inv_ambient = 1.0 - AMBIENT;
+    [
+        (AMBIENT + inv_ambient * diffuse_rgb[0] + specular_rgb[0]).min(1.0),
+        (AMBIENT + inv_ambient * diffuse_rgb[1] + specular_rgb[1]).min(1.0),
+        (AMBIENT + inv_ambient * diffuse_rgb[2] + specular_rgb[2]).min(1.0),
+    ]
 }
 
 /// Binning pass: assigns each triangle to every tile whose bounds overlap its screen bounding box.

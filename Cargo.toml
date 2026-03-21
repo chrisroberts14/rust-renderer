@@ -12,6 +12,9 @@ winit = "0.31.0-beta.2"
 [dev-dependencies]
 criterion = "0.5"
 
+[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
+pprof = { version = "0.13", features = ["flamegraph", "criterion"] }
+
 [[bench]]
 name = "renderer_bench"
 harness = false

@@ -45,6 +45,8 @@ fn bench_render_complex_scene_wire_frame(c: &mut Criterion) {
     });
 }
 
+// Flame graphs production doesn't compile on windows
+#[cfg(target_os = "windows")]
 criterion_group!(
     benches,
     bench_render_simple_scene,
@@ -52,4 +54,13 @@ criterion_group!(
     bench_render_simple_scene_wire_frame,
     bench_render_complex_scene_wire_frame
 );
+
+#[cfg(not(target_os = "windows"))]
+criterion_group! {
+    name = benches;
+    config = Criterion::default()
+        .with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets = bench_render_simple_scene, bench_render_complex_scene, bench_render_simple_scene_wire_frame, bench_render_complex_scene_wire_frame
+}
+
 criterion_main!(benches);
