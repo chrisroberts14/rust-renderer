@@ -23,5 +23,27 @@ fn bench_render_complex_scene(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_render_simple_scene, bench_render_complex_scene);
+fn bench_render_simple_scene_wire_frame(c: &mut Criterion) {
+    let (mut scene, _update_handle, _update_running) = create_simple_scene().unwrap();
+    scene.settings.toggle_wire_frame_mode();
+
+    c.bench_function("render_simple_wireframe", |b| {
+        b.iter(|| {
+            scene.render_scene();
+        })
+    });
+}
+
+fn bench_render_complex_scene_wire_frame(c: &mut Criterion) {
+    let (mut scene, _update_handle, _update_running) = create_complex_scene().unwrap();
+    scene.settings.toggle_wire_frame_mode();
+
+    c.bench_function("render_complex_wireframe", |b| {
+        b.iter(|| {
+            scene.render_scene();
+        })
+    });
+}
+
+criterion_group!(benches, bench_render_simple_scene, bench_render_complex_scene, bench_render_simple_scene_wire_frame, bench_render_complex_scene_wire_frame);
 criterion_main!(benches);
