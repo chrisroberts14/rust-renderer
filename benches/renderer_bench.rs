@@ -1,6 +1,5 @@
 /// To measure if any code improvements improved render time
-
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use rust_renderer::create_scene;
 
@@ -9,7 +8,7 @@ fn bench_render(c: &mut Criterion) {
 
     c.bench_function("render", |b| {
         b.iter(|| {
-           scene.render_scene();
+            scene.render_scene();
         })
     });
 }
