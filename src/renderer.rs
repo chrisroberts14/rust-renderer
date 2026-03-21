@@ -23,7 +23,7 @@ struct Vert {
 }
 
 /// A triangle with everything needed to rasterize
-pub(crate) struct PreparedTriangle {
+pub struct PreparedTriangle {
     verts: [Vert; 3],
     screen: [Vec2; 3],
     depths: [f32; 3],

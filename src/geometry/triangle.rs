@@ -3,7 +3,7 @@ use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::maths::vec4::Vec4;
 
-pub(crate) struct Triangle {
+pub struct Triangle {
     pub(crate) v0: Vec3,
     pub(crate) v1: Vec3,
     pub(crate) v2: Vec3,
