@@ -8,3 +8,10 @@ image = { version = "0.25.10", features = ["exr"] }
 pixels = "0.15.0"
 rayon = "1.11.0"
 winit = "0.31.0-beta.2"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "renderer_bench"
+harness = false
