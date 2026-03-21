@@ -2,7 +2,6 @@ use winit::event_loop::ControlFlow;
 use winit::event_loop::EventLoop;
 
 mod app;
-mod cache;
 mod fps;
 mod framebuffer;
 mod geometry;
