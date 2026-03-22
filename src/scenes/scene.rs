@@ -112,7 +112,7 @@ impl Scene {
 
         // Binning + rasterization pass.
         let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
-        let bins = bin_triangles(&triangles, &tiles);
+        let bins = bin_triangles(&triangles, &tiles, self.framebuffer.width);
         tiles
             .par_iter()
             .zip(bins.par_iter())
@@ -172,7 +172,7 @@ impl Scene {
         }
 
         let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
-        let bins = bin_triangles(&triangles, &tiles);
+        let bins = bin_triangles(&triangles, &tiles, self.framebuffer.width);
         for (tile, tri_indices) in tiles.iter().zip(bins.iter()) {
             // Pass empty lights — light boxes should appear unlit.
             Renderer::rasterize_tile(

@@ -125,26 +125,43 @@ fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[PointLight]) -
 
 /// Binning pass: assigns each triangle to every tile whose bounds overlap its screen bounding box.
 /// Returns one `Vec<usize>` per tile, containing indices into `triangles`.
-pub(crate) fn bin_triangles(triangles: &[PreparedTriangle], tiles: &[Tile]) -> Vec<Vec<usize>> {
+pub(crate) fn bin_triangles(
+    triangles: &[PreparedTriangle],
+    tiles: &[Tile],
+    screen_width: usize,
+) -> Vec<Vec<usize>> {
+    let tiles_per_row = (screen_width + TILE_SIZE - 1) / TILE_SIZE;
+
     let mut bins: Vec<Vec<usize>> = vec![Vec::new(); tiles.len()];
 
     for (tri_idx, tri) in triangles.iter().enumerate() {
         let [p0, p1, p2] = tri.screen;
 
-        // Screen-space bounding box of this triangle.
-        let min_x = p0.x.min(p1.x).min(p2.x);
-        let max_x = p0.x.max(p1.x).max(p2.x);
-        let min_y = p0.y.min(p1.y).min(p2.y);
-        let max_y = p0.y.max(p1.y).max(p2.y);
+        // Compute triangle screen-space bounding box
+        let min_x = p0.x.min(p1.x).min(p2.x).floor().max(0.0) as usize;
+        let max_x = p0.x.max(p1.x).max(p2.x).ceil().max(0.0) as usize;
+        let min_y = p0.y.min(p1.y).min(p2.y).floor().max(0.0) as usize;
+        let max_y = p0.y.max(p1.y).max(p2.y).ceil().max(0.0) as usize;
 
-        for (tile_idx, tile) in tiles.iter().enumerate() {
-            let tx = tile.x as f32;
-            let ty = tile.y as f32;
-            let tx_end = (tile.x + tile.width) as f32;
-            let ty_end = (tile.y + tile.height) as f32;
+        // Convert pixel bounds → tile indices
+        let tile_min_x = min_x / TILE_SIZE;
+        let tile_max_x = max_x / TILE_SIZE;
+        let tile_min_y = min_y / TILE_SIZE;
+        let tile_max_y = max_y / TILE_SIZE;
 
-            // AABB overlap: the triangle touches this tile if its bounding box intersects the tile rect.
-            if max_x >= tx && min_x < tx_end && max_y >= ty && min_y < ty_end {
+        // Clamp to valid tile grid
+        let max_tile_x = tiles_per_row - 1;
+        let max_tile_y = (tiles.len() / tiles_per_row) - 1;
+
+        let tile_min_x = tile_min_x.min(max_tile_x);
+        let tile_max_x = tile_max_x.min(max_tile_x);
+        let tile_min_y = tile_min_y.min(max_tile_y);
+        let tile_max_y = tile_max_y.min(max_tile_y);
+
+        // Assign triangle to overlapping tiles
+        for ty in tile_min_y..=tile_max_y {
+            for tx in tile_min_x..=tile_max_x {
+                let tile_idx = ty * tiles_per_row + tx;
                 bins[tile_idx].push(tri_idx);
             }
         }
