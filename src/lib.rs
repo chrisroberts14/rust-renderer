@@ -6,6 +6,7 @@ pub mod maths;
 pub mod renderer;
 pub mod scenes;
 pub mod tile;
+pub mod cache;
 
 use geometry::obj_loader::ObjLoader;
 use geometry::object::Object;
