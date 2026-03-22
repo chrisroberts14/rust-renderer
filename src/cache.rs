@@ -10,7 +10,7 @@ use std::hash::Hash;
 
 /// LRU Cache of a given size
 #[allow(dead_code)]
-struct LruCache<K, V> {
+pub struct LruCache<K, V> {
     capacity: usize,
     map: HashMap<K, V>,
     order: VecDeque<K>,
@@ -18,7 +18,7 @@ struct LruCache<K, V> {
 
 #[allow(dead_code)]
 impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
-    fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
             map: HashMap::new(),
@@ -32,7 +32,7 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
     /// (last to be removed)
     ///
     /// If it doesn't exist return None
-    fn get(&mut self, key: &K) -> Option<&V> {
+    pub fn get(&mut self, key: &K) -> Option<&V> {
         if self.map.contains_key(key) {
             // This removes the key from the order
             self.order.retain(|k| k != key);
@@ -49,7 +49,7 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
     /// If the cache is full remove the last used item and insert this one
     ///
     /// If the key already exists it is updated
-    fn insert(&mut self, key: K, value: V) {
+    pub fn insert(&mut self, key: K, value: V) {
         if self.map.contains_key(&key) {
             // This removes the key from the order so later when we push to the front it's the same as updating
             self.order.retain(|k| k != &key);
@@ -71,24 +71,31 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
 #[macro_export]
 macro_rules! cached {
     (
-        fn $name:ident($arg:ident : $key_ty:ty) -> $ret:ty = $cap:expr, $body:block
+        $vis:vis fn $name:ident($arg:ident : $key_ty:ty) -> $ret:ty = $cap:expr => $body:block
     ) => {
-        fn $name($arg: $key_ty) -> $ret {
+        $vis fn $name($arg: $key_ty) -> $ret {
             use std::sync::{Mutex, OnceLock};
 
             static CACHE: OnceLock<Mutex<$crate::LruCache<$key_ty, $ret>>> = OnceLock::new();
 
             let cache = CACHE.get_or_init(|| Mutex::new($crate::LruCache::new($cap)));
 
-            let mut cache = cache.lock().unwrap();
+            let mut cache_guard = cache.lock().unwrap();
 
-            if let Some(v) = cache.get(&$arg) {
+            if let Some(v) = cache_guard.get(&$arg) {
                 return v.clone();
             }
 
-            let result = (|| $body)();
+            // drop the read lock before computing
+            drop(cache_guard);
+            let result = {
+                $body
+            };
 
-            cache.put($arg.clone(), result.clone());
+            // lock again to insert
+            let mut cache_guard = cache.lock().unwrap();
+            cache_guard.insert($arg.clone(), result.clone());
+
             result
         }
     };

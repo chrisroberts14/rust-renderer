@@ -8,6 +8,8 @@ pub mod renderer;
 pub mod scenes;
 pub mod tile;
 
+pub use crate::cache::LruCache;
+
 use geometry::obj_loader::ObjLoader;
 use geometry::object::Object;
 use geometry::transform::Transform;
@@ -15,7 +17,7 @@ use maths::vec3::Vec3;
 use scenes::material::Material;
 use scenes::pointlight::PointLight;
 use scenes::scene::Scene;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
@@ -30,8 +32,10 @@ pub struct SceneCreateReturn {
 ///
 /// Returns a scene a handle for the object update thread and a bool for if that thread is running
 pub fn create_simple_scene() -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
+    let monkey = PathBuf::from("assets/monkey.obj");
+
     let scene_objects = vec![Object::new(
-        ObjLoader::load(Path::new("assets/monkey.obj"))?,
+        ObjLoader::load(monkey.clone()),
         Transform::default(),
         Material::Color([255, 255, 255, 255]),
     )];
@@ -55,24 +59,25 @@ pub fn create_simple_scene() -> Result<SceneCreateReturn, Box<dyn std::error::Er
 
 /// Creates a "complex" scene which involves 4 monkeys and 3 lights
 pub fn create_complex_scene() -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
+    let monkey = PathBuf::from("assets/monkey.obj");
     let scene_objects = vec![
         Object::new(
-            ObjLoader::load(Path::new("assets/monkey.obj"))?,
+            ObjLoader::load(monkey.clone()),
             Transform::default(),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("assets/monkey.obj"))?,
+            ObjLoader::load(monkey.clone()),
             Transform::in_position(Vec3::new(0.0, 5.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("assets/monkey.obj"))?,
+            ObjLoader::load(monkey.clone()),
             Transform::in_position(Vec3::new(5.0, 0.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("assets/monkey.obj"))?,
+            ObjLoader::load(monkey.clone()),
             Transform::in_position(Vec3::new(0.0, 0.0, -5.0)),
             Material::Color([255, 255, 255, 255]),
         ),
