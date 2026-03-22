@@ -14,7 +14,6 @@ use maths::vec3::Vec3;
 use scenes::material::Material;
 use scenes::pointlight::PointLight;
 use scenes::scene::Scene;
-use scenes::texture::Texture;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -26,7 +25,7 @@ use std::thread::JoinHandle;
 pub fn create_simple_scene()
 -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
     let scene_objects = vec![Object::new(
-        ObjLoader::load(Path::new("monkey.obj"))?,
+        ObjLoader::load(Path::new("assets/monkey.obj"))?,
         Transform::default(),
         Material::Color([255, 255, 255, 255]),
     )];
@@ -37,9 +36,7 @@ pub fn create_simple_scene()
         PointLight::new(Vec3::new(-5.0, 0.0, 0.0), [0.0, 0.0, 1.0], 15.0),
     ];
 
-    let mut scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
-
-    scene.skybox = Texture::load(Path::new("test.png")).ok();
+    let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 
@@ -51,22 +48,22 @@ pub fn create_complex_scene()
 -> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
     let scene_objects = vec![
         Object::new(
-            ObjLoader::load(Path::new("monkey.obj"))?,
+            ObjLoader::load(Path::new("assets/monkey.obj"))?,
             Transform::default(),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("monkey.obj"))?,
+            ObjLoader::load(Path::new("assets/monkey.obj"))?,
             Transform::in_position(Vec3::new(0.0, 5.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("monkey.obj"))?,
+            ObjLoader::load(Path::new("assets/monkey.obj"))?,
             Transform::in_position(Vec3::new(5.0, 0.0, 0.0)),
             Material::Color([255, 255, 255, 255]),
         ),
         Object::new(
-            ObjLoader::load(Path::new("monkey.obj"))?,
+            ObjLoader::load(Path::new("assets/monkey.obj"))?,
             Transform::in_position(Vec3::new(0.0, 0.0, -5.0)),
             Material::Color([255, 255, 255, 255]),
         ),
@@ -78,9 +75,7 @@ pub fn create_complex_scene()
         PointLight::new(Vec3::new(-5.0, 0.0, 0.0), [0.0, 0.0, 1.0], 15.0),
     ];
 
-    let mut scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
-
-    scene.skybox = Texture::load(Path::new("test.png")).ok();
+    let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 
