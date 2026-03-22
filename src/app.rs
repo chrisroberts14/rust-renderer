@@ -86,8 +86,11 @@ impl App {
             "n" => {
                 // Load the next scene in the files iterator
                 if let Some(scene_files) = &mut self.scene_files {
+                    let old_settings = self.scene.settings.clone();
+
                     let scene = SceneFile::to_scene(scene_files.next().unwrap()).unwrap();
                     self.scene = scene;
+                    self.scene.settings = old_settings;
 
                     // Start the update thread
                     self.scene.spawn_update_thread();

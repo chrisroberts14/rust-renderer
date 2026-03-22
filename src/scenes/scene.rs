@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use rayon::prelude::*;
 
+#[derive(Clone)]
 pub struct SceneSettings {
     pub render_lights: bool,
     pub wire_frame_mode: bool,
