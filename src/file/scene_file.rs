@@ -2,7 +2,7 @@
 ///
 /// We also define the reading and validation
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -66,4 +66,16 @@ impl SceneFile {
             .collect();
         Ok(Scene::new(800.0, 600.0, objs, scene.lights))
     }
+}
+
+/// Get all files in the assets/scene_defs directory
+pub fn get_all_scene_files() -> io::Result<Vec<PathBuf>> {
+    fs::read_dir("assets/scene_defs")?
+        .map(|res| res.map(|entry| entry.path()))
+        .filter(|res| {
+            res.as_ref()
+                .map(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
+                .unwrap_or(true)
+        })
+        .collect()
 }

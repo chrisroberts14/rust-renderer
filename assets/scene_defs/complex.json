@@ -19,16 +19,16 @@
         {
             "obj_path": "assets/monkey.obj",
             "transform": {
-                "position": [0, 0, 0],
-                "rotation": [5, 0, 0],
+                "position": [5, 0, 0],
+                "rotation": [0, 0, 0],
                 "scale": [1, 1, 1]
             }
         },
         {
             "obj_path": "assets/monkey.obj",
             "transform": {
-                "position": [0, 0, 0],
-                "rotation": [0, 0, -5],
+                "position": [0, 0, -5],
+                "rotation": [0, 0, 0],
                 "scale": [1, 1, 1]
             }
         }

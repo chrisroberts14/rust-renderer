@@ -1,3 +1,7 @@
+use std::iter::Cycle;
+use std::path::PathBuf;
+use std::vec::IntoIter;
+
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
@@ -5,6 +9,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
+use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
 use crate::scenes::scene::Scene;
 
@@ -14,16 +19,36 @@ pub struct App {
     scene: Scene,
     fps_counter: FpsCounter,
     cursor_grabbed: bool,
+    scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
 }
 
 impl App {
-    pub fn new(scene: Scene) -> Self {
-        Self {
-            window: None,
-            pixels: None,
-            scene,
-            fps_counter: FpsCounter::new(),
-            cursor_grabbed: false,
+    /// Create the app with an optional Scene to render
+    ///
+    /// If this is left empty the first in the scene defs file will be loaded instead
+    pub fn new(scene_option: Option<Scene>) -> Self {
+        match scene_option {
+            Some(scene) => Self {
+                window: None,
+                pixels: None,
+                scene,
+                fps_counter: FpsCounter::new(),
+                cursor_grabbed: false,
+                scene_files: None,
+            },
+            _ => {
+                let mut scene_files_iter = get_all_scene_files().unwrap().into_iter().cycle();
+                let scene = SceneFile::to_scene(scene_files_iter.next().unwrap()).unwrap();
+                // Get the first scene from the iterator
+                Self {
+                    window: None,
+                    pixels: None,
+                    scene,
+                    fps_counter: FpsCounter::new(),
+                    cursor_grabbed: false,
+                    scene_files: Some(scene_files_iter),
+                }
+            }
         }
     }
 
@@ -59,6 +84,16 @@ impl App {
             }
             Key::Character(ch) if ch == "l" => {
                 self.scene.settings.toggle_render_lights();
+            }
+            Key::Character(ch) if ch == "n" => {
+                // Load the next scene in the files iterator
+                if let Some(scene_files) = &mut self.scene_files {
+                    let scene = SceneFile::to_scene(scene_files.next().unwrap()).unwrap();
+                    self.scene = scene;
+
+                    // Start the update thread
+                    self.scene.spawn_update_thread();
+                }
             }
             Key::Named(NamedKey::Shift) => {
                 self.scene

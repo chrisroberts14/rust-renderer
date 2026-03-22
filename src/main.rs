@@ -1,6 +1,3 @@
-use std::path::PathBuf;
-
-use rust_renderer::create_from_file;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 use rust_renderer::app::App;
@@ -9,16 +6,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let scene_create_return = create_from_file(PathBuf::from("assets/scene_defs/simple.json"))?;
-
-    let app = App::new(scene_create_return.scene);
+    let app = App::new(None);
 
     event_loop.run_app(app)?;
-
-    scene_create_return
-        .is_scene_update_thread_running
-        .store(false, std::sync::atomic::Ordering::Relaxed);
-    scene_create_return.join_handle.join().unwrap();
 
     Ok(())
 }
