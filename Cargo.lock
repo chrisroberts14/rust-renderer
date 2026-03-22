@@ -2185,6 +2185,7 @@ dependencies = [
  "pixels",
  "pprof",
  "rayon",
+ "serde",
  "winit",
 ]
 
