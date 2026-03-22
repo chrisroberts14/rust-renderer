@@ -1,4 +1,5 @@
 pub mod app;
+pub mod cache;
 pub mod fps;
 pub mod framebuffer;
 pub mod geometry;
@@ -6,7 +7,6 @@ pub mod maths;
 pub mod renderer;
 pub mod scenes;
 pub mod tile;
-pub mod cache;
 
 use geometry::obj_loader::ObjLoader;
 use geometry::object::Object;
@@ -20,11 +20,16 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 
+pub struct SceneCreateReturn {
+    pub scene: Scene,
+    pub join_handle: JoinHandle<()>,
+    pub is_scene_update_thread_running: Arc<AtomicBool>,
+}
+
 /// Creates a simple scene with one monkey and 3 lights
 ///
 /// Returns a scene a handle for the object update thread and a bool for if that thread is running
-pub fn create_simple_scene()
--> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
+pub fn create_simple_scene() -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
     let scene_objects = vec![Object::new(
         ObjLoader::load(Path::new("assets/monkey.obj"))?,
         Transform::default(),
@@ -41,12 +46,15 @@ pub fn create_simple_scene()
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 
-    Ok((scene, update_handle, update_running))
+    Ok(SceneCreateReturn {
+        scene,
+        join_handle: update_handle,
+        is_scene_update_thread_running: update_running,
+    })
 }
 
 /// Creates a "complex" scene which involves 4 monkeys and 3 lights
-pub fn create_complex_scene()
--> Result<(Scene, JoinHandle<()>, Arc<AtomicBool>), Box<dyn std::error::Error>> {
+pub fn create_complex_scene() -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
     let scene_objects = vec![
         Object::new(
             ObjLoader::load(Path::new("assets/monkey.obj"))?,
@@ -80,5 +88,9 @@ pub fn create_complex_scene()
 
     let (update_handle, update_running) = scene.spawn_update_thread();
 
-    Ok((scene, update_handle, update_running))
+    Ok(SceneCreateReturn {
+        scene,
+        join_handle: update_handle,
+        is_scene_update_thread_running: update_running,
+    })
 }

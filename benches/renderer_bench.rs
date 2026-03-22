@@ -4,7 +4,8 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use rust_renderer::{create_complex_scene, create_simple_scene};
 
 fn bench_render_simple_scene(c: &mut Criterion) {
-    let (mut scene, _update_handle, _update_running) = create_simple_scene().unwrap();
+    let scene_create_return = create_simple_scene().unwrap();
+    let mut scene = scene_create_return.scene;
 
     c.bench_function("render_simple", |b| {
         b.iter(|| {
@@ -14,7 +15,8 @@ fn bench_render_simple_scene(c: &mut Criterion) {
 }
 
 fn bench_render_complex_scene(c: &mut Criterion) {
-    let (mut scene, _update_handle, _update_running) = create_complex_scene().unwrap();
+    let scene_create_return = create_complex_scene().unwrap();
+    let mut scene = scene_create_return.scene;
 
     c.bench_function("render_complex", |b| {
         b.iter(|| {
@@ -24,7 +26,8 @@ fn bench_render_complex_scene(c: &mut Criterion) {
 }
 
 fn bench_render_simple_scene_wire_frame(c: &mut Criterion) {
-    let (mut scene, _update_handle, _update_running) = create_simple_scene().unwrap();
+    let scene_create_return = create_simple_scene().unwrap();
+    let mut scene = scene_create_return.scene;
     scene.settings.toggle_wire_frame_mode();
 
     c.bench_function("render_simple_wireframe", |b| {
@@ -35,7 +38,8 @@ fn bench_render_simple_scene_wire_frame(c: &mut Criterion) {
 }
 
 fn bench_render_complex_scene_wire_frame(c: &mut Criterion) {
-    let (mut scene, _update_handle, _update_running) = create_complex_scene().unwrap();
+    let scene_create_return = create_complex_scene().unwrap();
+    let mut scene = scene_create_return.scene;
     scene.settings.toggle_wire_frame_mode();
 
     c.bench_function("render_complex_wireframe", |b| {

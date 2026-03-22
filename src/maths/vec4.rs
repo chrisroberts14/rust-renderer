@@ -18,9 +18,9 @@ impl Vec4 {
         Self { x, y, z, w }
     }
 
-    pub fn perspective_divide(self) -> Result<Vec3, ()> {
+    pub fn perspective_divide(self) -> Result<Vec3, &'static str> {
         if self.w == 0.0 {
-            return Err(());
+            return Err("Cannot divide by zero (w is 0)");
         }
         Ok(Vec3 {
             x: self.x / self.w,

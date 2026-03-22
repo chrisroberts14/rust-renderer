@@ -130,7 +130,7 @@ pub(crate) fn bin_triangles(
     tiles: &[Tile],
     screen_width: usize,
 ) -> Vec<Vec<usize>> {
-    let tiles_per_row = (screen_width + TILE_SIZE - 1) / TILE_SIZE;
+    let tiles_per_row = screen_width.div_ceil(TILE_SIZE);
 
     let mut bins: Vec<Vec<usize>> = vec![Vec::new(); tiles.len()];
 

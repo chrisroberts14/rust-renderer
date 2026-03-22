@@ -20,6 +20,12 @@ pub struct SceneSettings {
     pub wire_frame_mode: bool,
 }
 
+impl Default for SceneSettings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SceneSettings {
     pub fn new() -> Self {
         Self {
