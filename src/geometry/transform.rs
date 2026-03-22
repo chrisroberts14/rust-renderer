@@ -1,5 +1,9 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+
 use crate::maths::{mat4::Mat4, vec3::Vec3};
 
+#[derive(JsonSchema, Deserialize, Clone)]
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Vec3,

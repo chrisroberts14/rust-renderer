@@ -1,0 +1,29 @@
+{
+    "objects": [
+        {
+            "obj_path": "assets/monkey.obj",
+            "transform": {
+                "position": [0, 0, 0],
+                "rotation": [0, 0, 0],
+                "scale": [1, 1, 1]
+            }
+        }
+    ],
+    "lights": [
+        {
+            "position": [0, 0, 5],
+            "colour": [1, 0, 0],
+            "intensity": 15
+        },
+        {
+            "position": [5, 0, 0],
+            "colour": [0, 1, 0],
+            "intensity": 20
+        },
+        {
+            "position": [-5, 0, 0],
+            "colour": [0, 0, 1],
+            "intensity": 15
+        }
+    ]
+}

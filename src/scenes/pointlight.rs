@@ -1,6 +1,9 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+
 use crate::maths::vec3::Vec3;
 
-#[allow(dead_code)]
+#[derive(Deserialize, JsonSchema)]
 pub struct PointLight {
     pub position: Vec3,
     pub colour: [f32; 3],

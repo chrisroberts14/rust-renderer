@@ -1,5 +1,6 @@
 pub mod app;
 pub mod cache;
+pub mod file;
 pub mod fps;
 pub mod framebuffer;
 pub mod geometry;
@@ -9,6 +10,7 @@ pub mod scenes;
 pub mod tile;
 
 pub use crate::cache::LruCache;
+use crate::file::scene_file::SceneFile;
 
 use geometry::obj_loader::ObjLoader;
 use geometry::object::Object;
@@ -91,6 +93,17 @@ pub fn create_complex_scene() -> Result<SceneCreateReturn, Box<dyn std::error::E
 
     let scene = Scene::new(800.0, 600.0, scene_objects, scene_lights);
 
+    let (update_handle, update_running) = scene.spawn_update_thread();
+
+    Ok(SceneCreateReturn {
+        scene,
+        join_handle: update_handle,
+        is_scene_update_thread_running: update_running,
+    })
+}
+
+pub fn create_from_file() -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
+    let scene = SceneFile::to_scene(PathBuf::from("assets/scene_defs/simple.json"))?;
     let (update_handle, update_running) = scene.spawn_update_thread();
 
     Ok(SceneCreateReturn {

@@ -1,4 +1,4 @@
-use rust_renderer::create_simple_scene;
+use rust_renderer::create_from_file;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 use rust_renderer::app::App;
@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let scene_create_return = create_simple_scene()?;
+    let scene_create_return = create_from_file()?;
 
     let app = App::new(scene_create_return.scene);
 

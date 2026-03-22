@@ -1,3 +1,6 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+
 use crate::maths::vec2::Vec2;
 use crate::maths::vec4::Vec4;
 use std::ops::Add;
@@ -6,7 +9,7 @@ use std::ops::Mul;
 use std::ops::Neg;
 use std::ops::Sub;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, JsonSchema, Deserialize)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
