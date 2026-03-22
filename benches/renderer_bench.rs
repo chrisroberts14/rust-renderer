@@ -1,52 +1,51 @@
+use std::path::PathBuf;
+
 /// To measure if any code improvements improved render time
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use rust_renderer::{create_complex_scene, create_simple_scene};
+use rust_renderer::{create_from_file, scenes::scene::Scene};
 
-fn bench_render_simple_scene(c: &mut Criterion) {
-    let scene_create_return = create_simple_scene().unwrap();
-    let mut scene = scene_create_return.scene;
+const SIMPLE_SCENE_PATH: &str = "assets/scene_defs/simple.json";
+const COMPLEX_SCENE_PATH: &str = "assets/scene_defs/complex.json";
 
-    c.bench_function("render_simple", |b| {
+fn simple_scene() -> Scene {
+    let scene_create_return =
+        create_from_file(PathBuf::from(SIMPLE_SCENE_PATH)).expect("Failed to load simple scene");
+    scene_create_return.scene
+}
+
+fn complex_scene() -> Scene {
+    let scene_create_return =
+        create_from_file(PathBuf::from(COMPLEX_SCENE_PATH)).expect("Failed to load complex scene");
+    scene_create_return.scene
+}
+
+fn bench_scene(c: &mut Criterion, name: &str, mut scene: Scene, wireframe: bool) {
+    if wireframe {
+        scene.settings.toggle_wire_frame_mode();
+    }
+
+    c.bench_function(name, |b| {
         b.iter(|| {
             scene.render_scene();
         })
     });
 }
 
-fn bench_render_complex_scene(c: &mut Criterion) {
-    let scene_create_return = create_complex_scene().unwrap();
-    let mut scene = scene_create_return.scene;
-
-    c.bench_function("render_complex", |b| {
-        b.iter(|| {
-            scene.render_scene();
-        })
-    });
+fn bench_render_simple_scene(c: &mut Criterion) {
+    bench_scene(c, "render_simple", simple_scene(), false);
 }
 
 fn bench_render_simple_scene_wire_frame(c: &mut Criterion) {
-    let scene_create_return = create_simple_scene().unwrap();
-    let mut scene = scene_create_return.scene;
-    scene.settings.toggle_wire_frame_mode();
+    bench_scene(c, "render_simple_wireframe", simple_scene(), true);
+}
 
-    c.bench_function("render_simple_wireframe", |b| {
-        b.iter(|| {
-            scene.render_scene();
-        })
-    });
+fn bench_render_complex_scene(c: &mut Criterion) {
+    bench_scene(c, "render_complex", complex_scene(), false);
 }
 
 fn bench_render_complex_scene_wire_frame(c: &mut Criterion) {
-    let scene_create_return = create_complex_scene().unwrap();
-    let mut scene = scene_create_return.scene;
-    scene.settings.toggle_wire_frame_mode();
-
-    c.bench_function("render_complex_wireframe", |b| {
-        b.iter(|| {
-            scene.render_scene();
-        })
-    });
+    bench_scene(c, "render_complex_wireframe", complex_scene(), true);
 }
 
 // Flame graphs production doesn't compile on windows
