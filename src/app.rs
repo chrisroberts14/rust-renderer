@@ -6,7 +6,7 @@ use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, NamedKey, SmolStr};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
@@ -39,7 +39,10 @@ impl App {
             _ => {
                 let mut scene_files_iter = get_all_scene_files().unwrap().into_iter().cycle();
                 let scene = SceneFile::to_scene(scene_files_iter.next().unwrap()).unwrap();
-                // Get the first scene from the iterator
+
+                // Start the update thread
+                scene.spawn_update_thread();
+
                 Self {
                     window: None,
                     pixels: None,
@@ -52,40 +55,35 @@ impl App {
         }
     }
 
-    /// Handle keyboard entries
-    /// This mainly exists as a helper to prevent the window_event function
-    /// from becoming too large
-    fn handle_keyboard(&mut self, key_event: &KeyEvent) {
-        if key_event.state != ElementState::Pressed {
-            return;
-        }
-        match &key_event.logical_key {
-            Key::Character(ch) if ch == "w" => {
+    fn handle_character(&mut self, ch: &SmolStr) {
+        let ch = ch.as_str();
+        match ch {
+            "w" => {
                 let dir = self.scene.camera.forward();
                 self.scene.camera.move_camera(dir * 0.05);
             }
-            Key::Character(ch) if ch == "s" => {
+            "s" => {
                 let dir = self.scene.camera.forward();
                 self.scene.camera.move_camera(dir * -0.05);
             }
-            Key::Character(ch) if ch == "d" => {
+            "d" => {
                 let dir = self.scene.camera.right();
                 self.scene.camera.move_camera(dir * 0.05);
             }
-            Key::Character(ch) if ch == "a" => {
+            "a" => {
                 let dir = self.scene.camera.right();
                 self.scene.camera.move_camera(dir * -0.05);
             }
-            Key::Character(ch) if ch == " " => {
+            " " => {
                 self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
             }
-            Key::Character(ch) if ch == "m" => {
+            "m" => {
                 self.scene.settings.toggle_wire_frame_mode();
             }
-            Key::Character(ch) if ch == "l" => {
+            "l" => {
                 self.scene.settings.toggle_render_lights();
             }
-            Key::Character(ch) if ch == "n" => {
+            "n" => {
                 // Load the next scene in the files iterator
                 if let Some(scene_files) = &mut self.scene_files {
                     let scene = SceneFile::to_scene(scene_files.next().unwrap()).unwrap();
@@ -95,6 +93,19 @@ impl App {
                     self.scene.spawn_update_thread();
                 }
             }
+            _ => {}
+        }
+    }
+
+    /// Handle keyboard entries
+    /// This mainly exists as a helper to prevent the window_event function
+    /// from becoming too large
+    fn handle_keyboard(&mut self, key_event: &KeyEvent) {
+        if key_event.state != ElementState::Pressed {
+            return;
+        }
+        match &key_event.logical_key {
+            Key::Character(ch) => self.handle_character(ch),
             Key::Named(NamedKey::Shift) => {
                 self.scene
                     .camera

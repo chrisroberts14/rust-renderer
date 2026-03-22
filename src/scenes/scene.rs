@@ -66,6 +66,9 @@ impl Scene {
 
     /// Spawn a thread that continuously updates object transforms.
     /// Returns the join handle and a shutdown flag — set the flag to false and join the handle to stop the thread cleanly.
+    ///
+    /// TODO: With the implementation of scrolling through scenes we no longer close this thread cleanly
+    /// this is probably taken care of by the OS but would still be nice to do so ourselves
     pub fn spawn_update_thread(&self) -> (thread::JoinHandle<()>, Arc<AtomicBool>) {
         let objects = Arc::clone(&self.objects);
         let running = Arc::new(AtomicBool::new(true));
