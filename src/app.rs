@@ -229,6 +229,8 @@ impl ApplicationHandler for App {
                     .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);
                 self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
+                self.scene
+                    .resize_tile_vec(new_size.width as f32, new_size.height as f32);
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..

@@ -6,7 +6,7 @@ use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
 use crate::scenes::texture::Texture;
-use crate::tile::make_tiles;
+use crate::tile::{Tile, make_tiles};
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -82,6 +82,7 @@ pub struct Scene {
     pub settings: SceneSettings,
     pub skybox: Option<Texture>,
     pub update_thread: Option<UpdateThread>,
+    tiles: Vec<Tile>,
 }
 
 impl Scene {
@@ -97,14 +98,12 @@ impl Scene {
             lights,
             settings: SceneSettings::new(),
             skybox: None,
+            tiles: make_tiles(width as usize, height as usize, TILE_SIZE),
         }
     }
 
     /// Spawn a thread that continuously updates object transforms.
     /// Returns the join handle and a shutdown flag — set the flag to false and join the handle to stop the thread cleanly.
-    ///
-    /// TODO: With the implementation of scrolling through scenes we no longer close this thread cleanly
-    /// this is probably taken care of by the OS but would still be nice to do so ourselves
     fn spawn_update_thread_for(
         objects: &Arc<RwLock<Vec<Object>>>,
         running: &Arc<AtomicBool>,
@@ -134,6 +133,11 @@ impl Scene {
     pub fn spawn_update_thread(&self) -> UpdateThread {
         let running = Arc::new(AtomicBool::new(true));
         Self::spawn_update_thread_for(&self.objects, &running)
+    }
+
+    pub fn resize_tile_vec(&mut self, width: f32, height: f32) {
+        let new_tiles = make_tiles(width as usize, height as usize, TILE_SIZE);
+        self.tiles = new_tiles;
     }
 
     pub fn render_objects(&mut self) {
@@ -166,9 +170,8 @@ impl Scene {
         }
 
         // Binning + rasterization pass.
-        let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
-        let bins = bin_triangles(&triangles, &tiles, self.framebuffer.width);
-        tiles
+        let bins = bin_triangles(&triangles, &self.tiles, self.framebuffer.width);
+        self.tiles
             .par_iter()
             .zip(bins.par_iter())
             .for_each(|(tile, tri_indices)| {
