@@ -9,15 +9,11 @@ const SIMPLE_SCENE_PATH: &str = "assets/scene_defs/simple.json";
 const COMPLEX_SCENE_PATH: &str = "assets/scene_defs/complex.json";
 
 fn simple_scene() -> Scene {
-    let scene_create_return =
-        create_from_file(PathBuf::from(SIMPLE_SCENE_PATH)).expect("Failed to load simple scene");
-    scene_create_return.scene
+    create_from_file(PathBuf::from(SIMPLE_SCENE_PATH)).expect("Failed to load simple scene")
 }
 
 fn complex_scene() -> Scene {
-    let scene_create_return =
-        create_from_file(PathBuf::from(COMPLEX_SCENE_PATH)).expect("Failed to load complex scene");
-    scene_create_return.scene
+    create_from_file(PathBuf::from(COMPLEX_SCENE_PATH)).expect("Failed to load complex scene")
 }
 
 fn bench_scene(c: &mut Criterion, name: &str, mut scene: Scene, wireframe: bool) {

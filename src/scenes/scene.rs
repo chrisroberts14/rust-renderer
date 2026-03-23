@@ -11,6 +11,7 @@ use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use rayon::prelude::*;
@@ -44,6 +45,23 @@ impl SceneSettings {
     }
 }
 
+/// Struct to return when creating the update thread
+///
+/// This exists so we can define a method that stops the thread cleanly when it is dropped
+pub struct UpdateThread {
+    join_handle: Option<JoinHandle<()>>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for UpdateThread {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.join_handle.take() {
+            let _ = handle.join(); // ignore join errors during drop
+        }
+    }
+}
+
 pub struct Scene {
     pub objects: Arc<RwLock<Vec<Object>>>,
     pub framebuffer: Framebuffer,
@@ -51,12 +69,17 @@ pub struct Scene {
     pub lights: Vec<PointLight>,
     pub settings: SceneSettings,
     pub skybox: Option<Texture>,
+    pub update_thread: Option<UpdateThread>,
 }
 
 impl Scene {
     pub fn new(width: f32, height: f32, objects: Vec<Object>, lights: Vec<PointLight>) -> Self {
+        let objects = Arc::new(RwLock::new(objects));
+        let running = Arc::new(AtomicBool::new(true));
+
         Self {
-            objects: Arc::new(RwLock::new(objects)),
+            update_thread: Some(Self::spawn_update_thread_for(&objects, &running)),
+            objects,
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
             lights,
@@ -70,25 +93,35 @@ impl Scene {
     ///
     /// TODO: With the implementation of scrolling through scenes we no longer close this thread cleanly
     /// this is probably taken care of by the OS but would still be nice to do so ourselves
-    pub fn spawn_update_thread(&self) -> (thread::JoinHandle<()>, Arc<AtomicBool>) {
-        let objects = Arc::clone(&self.objects);
-        let running = Arc::new(AtomicBool::new(true));
-        let thread_running = Arc::clone(&running);
+    fn spawn_update_thread_for(
+        objects: &Arc<RwLock<Vec<Object>>>,
+        running: &Arc<AtomicBool>,
+    ) -> UpdateThread {
+        let objects = Arc::clone(objects);
+        let thread_running = Arc::clone(running);
         let handle = thread::spawn(move || {
             while thread_running.load(Ordering::Relaxed) {
                 {
                     let mut objs = objects.write().unwrap();
                     for object in objs.iter_mut() {
-                        object.transform.rotation.x += 0.01;
-                        object.transform.rotation.x %= 2.0 * std::f32::consts::PI;
-                        object.transform.rotation.y += 0.01;
-                        object.transform.rotation.y %= 2.0 * std::f32::consts::PI;
+                        object.transform.rotation.x =
+                            (object.transform.rotation.x + 0.01) % (2.0 * std::f32::consts::PI);
+                        object.transform.rotation.y =
+                            (object.transform.rotation.y + 0.01) % (2.0 * std::f32::consts::PI);
                     }
-                } // write lock dropped here
+                }
                 thread::sleep(Duration::from_millis(16));
             }
         });
-        (handle, running)
+        UpdateThread {
+            join_handle: Some(handle),
+            stop: Arc::clone(running),
+        }
+    }
+
+    pub fn spawn_update_thread(&self) -> UpdateThread {
+        let running = Arc::new(AtomicBool::new(true));
+        Self::spawn_update_thread_for(&self.objects, &running)
     }
 
     pub fn render_objects(&mut self) {

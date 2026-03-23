@@ -45,9 +45,6 @@ impl App {
                 let next_scene = scene_files_iter.next().ok_or("No scene files found")?;
                 let scene = SceneFile::from_file(next_scene, width, height)?;
 
-                // Start the update thread
-                scene.spawn_update_thread();
-
                 Ok(Self {
                     window: None,
                     pixels: None,
