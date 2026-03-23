@@ -26,7 +26,7 @@ impl App {
     /// Create the app with an optional Scene to render
     ///
     /// If this is left empty the first in the scene defs file will be loaded instead
-    pub fn new(scene_option: Option<Scene>) -> Self {
+    pub fn new(scene_option: Option<Scene>, width: f32, height: f32) -> Self {
         match scene_option {
             Some(scene) => Self {
                 window: None,
@@ -38,7 +38,8 @@ impl App {
             },
             _ => {
                 let mut scene_files_iter = get_all_scene_files().unwrap().into_iter().cycle();
-                let scene = SceneFile::to_scene(scene_files_iter.next().unwrap()).unwrap();
+                let scene =
+                    SceneFile::from_file(scene_files_iter.next().unwrap(), width, height).unwrap();
 
                 // Start the update thread
                 scene.spawn_update_thread();
@@ -88,7 +89,12 @@ impl App {
                 if let Some(scene_files) = &mut self.scene_files {
                     let old_settings = self.scene.settings.clone();
 
-                    let scene = SceneFile::to_scene(scene_files.next().unwrap()).unwrap();
+                    let scene = SceneFile::from_file(
+                        scene_files.next().unwrap(),
+                        self.scene.framebuffer.width as f32,
+                        self.scene.framebuffer.height as f32,
+                    )
+                    .unwrap();
                     self.scene = scene;
                     self.scene.settings = old_settings;
 

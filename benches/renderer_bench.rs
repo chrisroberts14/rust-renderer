@@ -59,6 +59,9 @@ criterion_group!(
 );
 
 #[cfg(not(target_os = "windows"))]
+use pprof::criterion::{Output, PProfProfiler};
+
+#[cfg(not(target_os = "windows"))]
 criterion_group! {
     name = benches;
     config = Criterion::default()

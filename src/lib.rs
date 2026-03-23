@@ -27,7 +27,7 @@ pub struct SceneCreateReturn {
 pub fn create_from_file(
     file_path: PathBuf,
 ) -> Result<SceneCreateReturn, Box<dyn std::error::Error>> {
-    let scene = SceneFile::to_scene(file_path)?;
+    let scene = SceneFile::from_file(file_path, 800.0, 600.0)?;
     let (update_handle, update_running) = scene.spawn_update_thread();
 
     Ok(SceneCreateReturn {

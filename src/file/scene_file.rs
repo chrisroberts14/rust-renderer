@@ -1,3 +1,6 @@
+use schemars::{JsonSchema, Schema};
+use serde::Deserialize;
+use std::error::Error;
 /// This file defines the schema for json files which specify a given scene to render
 ///
 /// We also define the reading and validation
@@ -5,10 +8,6 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
-
-use schemars::{JsonSchema, Schema};
-use serde::Deserialize;
-use serde_json::Error as SerdeError;
 
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
@@ -23,17 +22,17 @@ use crate::{
 #[derive(JsonSchema, Deserialize)]
 pub struct SceneFile {
     // We limit the scene files to paths to obj files
-    pub objects: Vec<ObjectSchema>,
-    pub lights: Vec<PointLight>,
+    objects: Vec<ObjectSchema>,
+    lights: Vec<PointLight>,
 }
 
 /// Schema for an individual object.
 ///
 /// Initial implementation only allows for pre-defined obj files to be used in the scene
 ///
-/// TODO: Add some way to create arbritrary shapes
+/// TODO: Add some way to create arbitrary shapes
 #[derive(JsonSchema, Deserialize)]
-pub struct ObjectSchema {
+struct ObjectSchema {
     obj_path: PathBuf,
     transform: Transform,
 }
@@ -45,9 +44,13 @@ impl SceneFile {
     }
 
     /// Create an actual `Scene` object from a file
-    pub fn to_scene<P: AsRef<Path>>(path: P) -> Result<Scene, SerdeError> {
+    pub fn from_file<P: AsRef<Path>>(
+        path: P,
+        window_width: f32,
+        window_height: f32,
+    ) -> Result<Scene, Box<dyn Error>> {
         // Read in the data from the file
-        let data = fs::read_to_string(path).unwrap();
+        let data = fs::read_to_string(path)?;
         let scene: SceneFile = serde_json::from_str(&data)?;
 
         // Create object vec from the object schema objects read from the JSON file
@@ -64,7 +67,7 @@ impl SceneFile {
                 )
             })
             .collect();
-        Ok(Scene::new(800.0, 600.0, objs, scene.lights))
+        Ok(Scene::new(window_width, window_height, objs, scene.lights))
     }
 }
 
@@ -75,7 +78,7 @@ pub fn get_all_scene_files() -> io::Result<Vec<PathBuf>> {
         .filter(|res| {
             res.as_ref()
                 .map(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-                .unwrap_or(true)
+                .unwrap_or(false)
         })
         .collect()
 }
