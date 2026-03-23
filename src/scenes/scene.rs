@@ -1,7 +1,7 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
-use crate::renderer::{Renderer, TILE_SIZE, bin_triangles};
+use crate::renderer::init_renderer::{Renderer, TILE_SIZE, bin_triangles};
 use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;

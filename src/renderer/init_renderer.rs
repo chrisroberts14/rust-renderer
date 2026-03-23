@@ -89,6 +89,7 @@ fn clip_near(vertices: [Vert; 3], near: f32) -> Vec<[Vert; 3]> {
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).
+#[inline(always)]
 fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[PointLight]) -> [f32; 3] {
     if lights.is_empty() {
         return [1.0; 3];
