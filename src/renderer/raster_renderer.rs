@@ -7,12 +7,13 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
-use crate::tile::Tile;
+use crate::tile::{Tile, make_tiles};
+use rayon::prelude::*;
 
 const AMBIENT: f32 = 0.15;
 const SHININESS: i32 = 32;
 pub(crate) const TILE_SIZE: usize = 32;
-pub struct Renderer;
+pub struct RasterRenderer;
 
 // A vertex bundle: (camera-space position, world-space position, world-space normal, texture UV)
 #[derive(Clone, Copy)]
@@ -171,7 +172,7 @@ pub(crate) fn bin_triangles(
     bins
 }
 
-impl Renderer {
+impl RasterRenderer {
     /// Geometry pass: transforms, clips, projects, and backface-culls all faces of an object.
     /// Returns a flat list of screen-ready triangles with no framebuffer writes.
     pub fn prepare_object(
@@ -361,5 +362,49 @@ impl Renderer {
             );
             framebuffer.draw_triangle_wireframe(&screen_tri);
         }
+    }
+}
+
+impl super::Renderer for RasterRenderer {
+    fn render_objects(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        lights: &[PointLight],
+        framebuffer: &Framebuffer,
+    ) {
+        let width = framebuffer.width as f32;
+        let height = framebuffer.height as f32;
+        let view = camera.view_matrix();
+        let projection = camera.projection_matrix();
+
+        let triangles: Vec<_> = objects
+            .iter()
+            .flat_map(|obj| Self::prepare_object(obj, width, height, view, projection, camera.near))
+            .collect();
+
+        let tiles = make_tiles(framebuffer.width, framebuffer.height, TILE_SIZE);
+        let bins = bin_triangles(&triangles, &tiles, framebuffer.width);
+
+        tiles
+            .par_iter()
+            .zip(bins.par_iter())
+            .for_each(|(tile, tri_indices)| {
+                Self::rasterize_tile(tile, tri_indices, &triangles, camera, lights, framebuffer);
+            });
+    }
+
+    fn render_wireframe(&self, objects: &[Object], camera: &Camera, framebuffer: &Framebuffer) {
+        let width = framebuffer.width as f32;
+        let height = framebuffer.height as f32;
+        let view = camera.view_matrix();
+        let projection = camera.projection_matrix();
+
+        let triangles: Vec<_> = objects
+            .iter()
+            .flat_map(|obj| Self::prepare_object(obj, width, height, view, projection, camera.near))
+            .collect();
+
+        Self::draw_wireframe(&triangles, framebuffer);
     }
 }

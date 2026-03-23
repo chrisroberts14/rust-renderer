@@ -1,4 +1,4 @@
-pub mod init_renderer;
+pub mod raster_renderer;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;

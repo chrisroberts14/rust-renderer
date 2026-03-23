@@ -1,10 +1,12 @@
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
+    renderer::Renderer,
     scenes::{material::Material, pointlight::PointLight, scene::Scene},
 };
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
 use std::error::Error;
+use std::sync::Arc;
 /// This file defines the schema for json files which specify a given scene to render
 ///
 /// We also define the reading and validation
@@ -47,6 +49,7 @@ impl SceneFile {
         path: P,
         window_width: f32,
         window_height: f32,
+        renderer: Arc<dyn Renderer>,
     ) -> Result<Scene, Box<dyn Error>> {
         // Read in the data from the file
         let data = fs::read_to_string(path)?;
@@ -67,7 +70,13 @@ impl SceneFile {
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Scene::new(window_width, window_height, objs, scene.lights))
+        Ok(Scene::new(
+            window_width,
+            window_height,
+            objs,
+            scene.lights,
+            renderer,
+        ))
     }
 }
 

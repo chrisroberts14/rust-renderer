@@ -1,20 +1,17 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
-use crate::renderer::init_renderer::{Renderer, TILE_SIZE, bin_triangles};
+use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
 use crate::scenes::texture::Texture;
-use crate::tile::{Tile, make_tiles};
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-
-use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct SceneSettings {
@@ -82,11 +79,17 @@ pub struct Scene {
     pub settings: SceneSettings,
     pub skybox: Option<Texture>,
     pub update_thread: Option<UpdateThread>,
-    tiles: Vec<Tile>,
+    renderer: Arc<dyn Renderer>,
 }
 
 impl Scene {
-    pub fn new(width: f32, height: f32, objects: Vec<Object>, lights: Vec<PointLight>) -> Self {
+    pub fn new(
+        width: f32,
+        height: f32,
+        objects: Vec<Object>,
+        lights: Vec<PointLight>,
+        renderer: Arc<dyn Renderer>,
+    ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
         let running = Arc::new(AtomicBool::new(true));
 
@@ -98,7 +101,7 @@ impl Scene {
             lights,
             settings: SceneSettings::new(),
             skybox: None,
-            tiles: make_tiles(width as usize, height as usize, TILE_SIZE),
+            renderer,
         }
     }
 
@@ -135,76 +138,31 @@ impl Scene {
         Self::spawn_update_thread_for(&self.objects, &running)
     }
 
-    pub fn resize_tile_vec(&mut self, width: f32, height: f32) {
-        let new_tiles = make_tiles(width as usize, height as usize, TILE_SIZE);
-        self.tiles = new_tiles;
-    }
-
     pub fn render_objects(&mut self) {
-        let fb_width = self.framebuffer.width as f32;
-        let fb_height = self.framebuffer.height as f32;
-
-        // Geometry pass: transform, clip, project, and backface-cull all objects.
         let objects = self.objects.read().unwrap();
-
-        let view = self.camera.view_matrix();
-        let projection = self.camera.projection_matrix();
-
-        let triangles: Vec<_> = objects
-            .iter()
-            .flat_map(|obj| {
-                Renderer::prepare_object(
-                    obj,
-                    fb_width,
-                    fb_height,
-                    view,
-                    projection,
-                    self.camera.near,
-                )
-            })
-            .collect();
-
         if self.settings.wire_frame_mode {
-            Renderer::draw_wireframe(&triangles, &self.framebuffer);
-            return;
+            self.renderer
+                .render_wireframe(&objects, &self.camera, &self.framebuffer);
+        } else {
+            self.renderer
+                .render_objects(&objects, &self.camera, &self.lights, &self.framebuffer);
         }
-
-        // Binning + rasterization pass.
-        let bins = bin_triangles(&triangles, &self.tiles, self.framebuffer.width);
-        self.tiles
-            .par_iter()
-            .zip(bins.par_iter())
-            .for_each(|(tile, tri_indices)| {
-                Renderer::rasterize_tile(
-                    tile,
-                    tri_indices,
-                    &triangles,
-                    &self.camera,
-                    &self.lights,
-                    &self.framebuffer,
-                );
-            });
     }
 
     /// Renders small box representations of each point light for debugging.
     /// Light boxes are rendered unlit so their colour always matches the light colour.
     pub fn render_lights(&mut self) {
-        let fb_width = self.framebuffer.width as f32;
-        let fb_height = self.framebuffer.height as f32;
-        let view = self.camera.view_matrix();
-        let projection = self.camera.projection_matrix();
-
-        let triangles: Vec<_> = self
+        let light_objects: Vec<Object> = self
             .lights
             .iter()
-            .flat_map(|light| {
+            .map(|light| {
                 let colour = [
                     (light.colour[0] * 255.0) as u8,
                     (light.colour[1] * 255.0) as u8,
                     (light.colour[2] * 255.0) as u8,
                     255,
                 ];
-                let light_box = Object::new(
+                Object::new(
                     Cube::mesh(1.0),
                     Transform {
                         position: light.position,
@@ -212,35 +170,17 @@ impl Scene {
                         scale: Vec3::new(0.1, 0.1, 0.1),
                     },
                     Material::Color(colour),
-                );
-                Renderer::prepare_object(
-                    &light_box,
-                    fb_width,
-                    fb_height,
-                    view,
-                    projection,
-                    self.camera.near,
                 )
             })
             .collect();
 
         if self.settings.wire_frame_mode {
-            Renderer::draw_wireframe(&triangles, &self.framebuffer);
-            return;
-        }
-
-        let tiles = make_tiles(self.framebuffer.width, self.framebuffer.height, TILE_SIZE);
-        let bins = bin_triangles(&triangles, &tiles, self.framebuffer.width);
-        for (tile, tri_indices) in tiles.iter().zip(bins.iter()) {
+            self.renderer
+                .render_wireframe(&light_objects, &self.camera, &self.framebuffer);
+        } else {
             // Pass empty lights — light boxes should appear unlit.
-            Renderer::rasterize_tile(
-                tile,
-                tri_indices,
-                &triangles,
-                &self.camera,
-                &[],
-                &self.framebuffer,
-            );
+            self.renderer
+                .render_objects(&light_objects, &self.camera, &[], &self.framebuffer);
         }
     }
 

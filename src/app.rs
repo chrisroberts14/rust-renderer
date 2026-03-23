@@ -11,7 +11,10 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
+use crate::renderer::Renderer;
+use crate::renderer::raster_renderer::RasterRenderer;
 use crate::scenes::scene::Scene;
+use std::sync::Arc;
 
 pub struct App {
     window: Option<&'static dyn Window>,
@@ -20,6 +23,7 @@ pub struct App {
     fps_counter: FpsCounter,
     cursor_grabbed: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
+    renderer: Arc<dyn Renderer>,
 }
 
 impl App {
@@ -31,6 +35,7 @@ impl App {
         width: f32,
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let renderer: Arc<dyn Renderer> = Arc::new(RasterRenderer);
         match scene_option {
             Some(scene) => Ok(Self {
                 window: None,
@@ -39,11 +44,12 @@ impl App {
                 fps_counter: FpsCounter::new(),
                 cursor_grabbed: false,
                 scene_files: None,
+                renderer,
             }),
             _ => {
                 let mut scene_files_iter = get_all_scene_files()?.into_iter().cycle();
                 let next_scene = scene_files_iter.next().ok_or("No scene files found")?;
-                let scene = SceneFile::from_file(next_scene, width, height)?;
+                let scene = SceneFile::from_file(next_scene, width, height, Arc::clone(&renderer))?;
 
                 Ok(Self {
                     window: None,
@@ -52,6 +58,7 @@ impl App {
                     fps_counter: FpsCounter::new(),
                     cursor_grabbed: false,
                     scene_files: Some(scene_files_iter),
+                    renderer,
                 })
             }
         }
@@ -100,6 +107,7 @@ impl App {
                         next_scene,
                         self.scene.framebuffer.width as f32,
                         self.scene.framebuffer.height as f32,
+                        Arc::clone(&self.renderer),
                     )?;
                     self.scene = scene;
                     self.scene.settings = old_settings;
@@ -229,8 +237,6 @@ impl ApplicationHandler for App {
                     .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);
                 self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
-                self.scene
-                    .resize_tile_vec(new_size.width as f32, new_size.height as f32);
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
