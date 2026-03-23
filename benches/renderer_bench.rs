@@ -22,9 +22,11 @@ fn bench_scene(c: &mut Criterion, name: &str, mut scene: Scene, wireframe: bool)
     }
 
     c.bench_function(name, |b| {
-        b.iter(|| {
-            scene.render_scene();
-        })
+        b.iter_batched(
+            || scene.clone(), // setup: fresh scene per iteration
+            |mut s| s.render_scene(),
+            criterion::BatchSize::SmallInput,
+        )
     });
 }
 

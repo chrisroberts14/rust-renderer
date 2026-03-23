@@ -50,18 +50,30 @@ impl SceneSettings {
 /// This exists so we can define a method that stops the thread cleanly when it is dropped
 pub struct UpdateThread {
     join_handle: Option<JoinHandle<()>>,
-    stop: Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
+}
+
+/// This custom clone implementation doesn't actually copy anything it solely is used for simplicity
+/// in benchmarks
+impl Clone for UpdateThread {
+    fn clone(&self) -> Self {
+        Self {
+            join_handle: None,
+            running: self.running.clone(),
+        }
+    }
 }
 
 impl Drop for UpdateThread {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         if let Some(handle) = self.join_handle.take() {
             let _ = handle.join(); // ignore join errors during drop
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Scene {
     pub objects: Arc<RwLock<Vec<Object>>>,
     pub framebuffer: Framebuffer,
@@ -115,7 +127,7 @@ impl Scene {
         });
         UpdateThread {
             join_handle: Some(handle),
-            stop: Arc::clone(running),
+            running: Arc::clone(running),
         }
     }
 

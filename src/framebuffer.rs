@@ -14,6 +14,26 @@ pub struct Framebuffer {
     pub depth: Vec<AtomicU32>,
 }
 
+/// Custom clone for framebuffer so we can copy scenes
+impl Clone for Framebuffer {
+    fn clone(&self) -> Self {
+        Self {
+            width: self.width,
+            height: self.height,
+            pixels: self
+                .pixels
+                .iter()
+                .map(|a| AtomicU32::new(a.load(Ordering::Relaxed)))
+                .collect(),
+            depth: self
+                .depth
+                .iter()
+                .map(|a| AtomicU32::new(a.load(Ordering::Relaxed)))
+                .collect(),
+        }
+    }
+}
+
 impl Framebuffer {
     /// Create a new frame buffer with the given width and height, initializing the pixel data to zero.
     pub fn new(width: usize, height: usize) -> Self {

@@ -1,5 +1,6 @@
 use crate::maths::{mat4::Mat4, vec3::Vec3};
 
+#[derive(Clone, Debug)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Vec3,
