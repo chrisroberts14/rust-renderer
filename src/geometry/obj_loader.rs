@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
@@ -13,8 +14,8 @@ pub struct ObjLoader;
 /// Polygons with more than 3 vertices are fan-triangulated.
 impl ObjLoader {
     cached! {
-        pub fn load(path: PathBuf) -> Mesh = 100 => {
-            let source = fs::read_to_string(&path).unwrap();
+        pub fn load(path: PathBuf) -> Result<Mesh, Box<dyn Error>> = 100 => {
+            let source = fs::read_to_string(&path)?;
 
             let mut vertices: Vec<Vec3> = Vec::new();
             let mut uvs: Vec<Vec2> = Vec::new();
@@ -86,7 +87,7 @@ impl ObjLoader {
                 }
             }
 
-            Mesh::new(vertices, faces, uvs, uv_faces)
+            Ok(Mesh::new(vertices, faces, uvs, uv_faces))
         }
     }
 }

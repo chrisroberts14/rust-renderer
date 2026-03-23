@@ -54,7 +54,7 @@ impl FpsCounter {
     }
 
     /// Write the current FPS to the top-left corner of the screen
-    pub fn render_to_screen(&self, framebuffer: &mut Framebuffer) {
+    pub fn render_to_screen(&self, framebuffer: &Framebuffer) {
         let digits = self.fps.to_string();
         let color = [255u8, 255, 0, 255]; // yellow
         let scale = 3;

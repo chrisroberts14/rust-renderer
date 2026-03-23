@@ -1,3 +1,7 @@
+use crate::{
+    geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
+    scenes::{material::Material, pointlight::PointLight, scene::Scene},
+};
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
 use std::error::Error;
@@ -7,11 +11,6 @@ use std::error::Error;
 use std::{
     fs, io,
     path::{Path, PathBuf},
-};
-
-use crate::{
-    geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
-    scenes::{material::Material, pointlight::PointLight, scene::Scene},
 };
 
 /// This is a struct representing the whole file
@@ -60,13 +59,14 @@ impl SceneFile {
             .objects
             .iter()
             .map(|obj| {
-                Object::new(
-                    ObjLoader::load(obj.obj_path.clone()),
+                let obj_from_file = ObjLoader::load(obj.obj_path.clone())?;
+                Ok::<Object, Box<dyn Error>>(Object::new(
+                    obj_from_file,
                     obj.transform.clone(),
                     Material::Color([255, 255, 255, 255]),
-                )
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Scene::new(window_width, window_height, objs, scene.lights))
     }
 }

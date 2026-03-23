@@ -43,8 +43,12 @@ impl Transform {
     /// Used to correctly transform normals when the model has non-uniform scaling.
     pub fn matrices(&self) -> (Mat4, Mat4) {
         let model = self.matrix();
-        let normal = model.inverse().unwrap().transpose();
-        (model, normal)
+        // Degenerate transforms (such as scale 0.0) should not panic the renderer
+        if let Some(normal) = model.inverse() {
+            let normal = normal.transpose();
+            return (model, normal);
+        }
+        (model, Mat4::identity())
     }
 }
 

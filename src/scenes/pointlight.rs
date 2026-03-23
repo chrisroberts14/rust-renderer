@@ -20,12 +20,7 @@ impl PointLight {
     }
 
     pub fn direction_to(&self, point: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.position.x - point.x,
-            y: self.position.y - point.y,
-            z: self.position.z - point.z,
-        }
-        .normalise()
+        (self.position - point).normalise()
     }
 
     pub fn intensity_at(&self, point: Vec3) -> f32 {

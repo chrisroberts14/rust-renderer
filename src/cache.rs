@@ -71,30 +71,28 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
 #[macro_export]
 macro_rules! cached {
     (
-        $vis:vis fn $name:ident($arg:ident : $key_ty:ty) -> $ret:ty = $cap:expr => $body:block
+        $vis:vis fn $name:ident($arg:ident : $key_ty:ty) -> Result<$ok:ty, $err:ty> = $cap:expr => $body:block
     ) => {
-        $vis fn $name($arg: $key_ty) -> $ret {
+        $vis fn $name($arg: $key_ty) -> Result<$ok, $err> {
             use std::sync::{Mutex, OnceLock};
 
-            static CACHE: OnceLock<Mutex<$crate::LruCache<$key_ty, $ret>>> = OnceLock::new();
+            static CACHE: OnceLock<Mutex<$crate::LruCache<$key_ty, $ok>>> = OnceLock::new();
 
             let cache = CACHE.get_or_init(|| Mutex::new($crate::LruCache::new($cap)));
 
-            let mut cache_guard = cache.lock().unwrap();
+            {
+                let mut cache_guard = cache.lock().unwrap();
+                if let Some(v) = cache_guard.get(&$arg) {
+                    return Ok(v.clone());
+                }
+            } // lock released here
 
-            if let Some(v) = cache_guard.get(&$arg) {
-                return v.clone();
+            let result: Result<$ok, $err> = { $body };
+
+            if let Ok(ref value) = result {
+                let mut cache_guard = cache.lock().unwrap();
+                cache_guard.insert($arg.clone(), value.clone());
             }
-
-            // drop the read lock before computing
-            drop(cache_guard);
-            let result = {
-                $body
-            };
-
-            // lock again to insert
-            let mut cache_guard = cache.lock().unwrap();
-            cache_guard.insert($arg.clone(), result.clone());
 
             result
         }
