@@ -4,7 +4,7 @@ use std::ops::Sub;
 
 use crate::maths::vec3::Vec3;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vec4 {
     pub x: f32,
     pub y: f32,
