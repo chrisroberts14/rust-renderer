@@ -9,7 +9,7 @@ use std::ops::Mul;
 use std::ops::Neg;
 use std::ops::Sub;
 
-#[derive(Copy, Clone, Debug, JsonSchema, Deserialize)]
+#[derive(Copy, Clone, Debug, JsonSchema, Deserialize, PartialEq)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
@@ -157,5 +157,130 @@ impl Neg for Vec3 {
             y: -self.y,
             z: -self.z,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx(a: Vec3, b: Vec3) -> bool {
+        (a.x - b.x).abs() < 1e-5 && (a.y - b.y).abs() < 1e-5 && (a.z - b.z).abs() < 1e-5
+    }
+
+    #[test]
+    fn test_add() {
+        assert_eq!(
+            Vec3::new(1.0, 2.0, 3.0) + Vec3::new(4.0, 5.0, 6.0),
+            Vec3::new(5.0, 7.0, 9.0)
+        );
+    }
+
+    #[test]
+    fn test_sub() {
+        assert_eq!(
+            Vec3::new(5.0, 7.0, 9.0) - Vec3::new(1.0, 2.0, 3.0),
+            Vec3::new(4.0, 5.0, 6.0)
+        );
+    }
+
+    #[test]
+    fn test_mul_scalar() {
+        assert_eq!(Vec3::new(1.0, 2.0, 3.0) * 3.0, Vec3::new(3.0, 6.0, 9.0));
+    }
+
+    #[test]
+    fn test_div_scalar() {
+        assert_eq!(Vec3::new(3.0, 6.0, 9.0) / 3.0, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_neg() {
+        assert_eq!(-Vec3::new(1.0, -2.0, 3.0), Vec3::new(-1.0, 2.0, -3.0));
+    }
+
+    #[test]
+    fn test_scale() {
+        assert_eq!(
+            Vec3::new(1.0, 2.0, 3.0).scale(2.0),
+            Vec3::new(2.0, 4.0, 6.0)
+        );
+    }
+
+    #[test]
+    fn test_dot_perpendicular() {
+        assert_eq!(Vec3::new(1.0, 0.0, 0.0).dot(Vec3::new(0.0, 1.0, 0.0)), 0.0);
+    }
+
+    #[test]
+    fn test_dot_value() {
+        // (1,2,3)·(4,5,6) = 4+10+18 = 32
+        assert_eq!(Vec3::new(1.0, 2.0, 3.0).dot(Vec3::new(4.0, 5.0, 6.0)), 32.0);
+    }
+
+    #[test]
+    fn test_dot_self_equals_length_squared() {
+        let v = Vec3::new(2.0, 3.0, 6.0);
+        assert_eq!(v.dot(v), v.length() * v.length());
+    }
+
+    #[test]
+    fn test_cross_basis_vectors() {
+        // x × y = z, y × z = x, z × x = y
+        let x = Vec3::new(1.0, 0.0, 0.0);
+        let y = Vec3::new(0.0, 1.0, 0.0);
+        let z = Vec3::new(0.0, 0.0, 1.0);
+        assert_eq!(x.cross(y), z);
+        assert_eq!(y.cross(z), x);
+        assert_eq!(z.cross(x), y);
+    }
+
+    #[test]
+    fn test_cross_self_is_zero() {
+        let v = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!(v.cross(v), Vec3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_length() {
+        // (2, 3, 6): sqrt(4+9+36) = sqrt(49) = 7
+        assert_eq!(Vec3::new(2.0, 3.0, 6.0).length(), 7.0);
+    }
+
+    #[test]
+    fn test_normalise() {
+        let n = Vec3::new(2.0, 3.0, 6.0).normalise(); // length 7
+        assert!(
+            approx(n, Vec3::new(2.0 / 7.0, 3.0 / 7.0, 6.0 / 7.0)),
+            "{n:?}"
+        );
+        assert!((n.length() - 1.0).abs() < 1e-5, "length = {}", n.length());
+    }
+
+    #[test]
+    fn test_rotate_x() {
+        // (0, 1, 0) rotated 90° around X → (0, 0, 1)
+        let r = Vec3::new(0.0, 1.0, 0.0).rotate_x(std::f32::consts::FRAC_PI_2);
+        assert!(approx(r, Vec3::new(0.0, 0.0, 1.0)), "{r:?}");
+    }
+
+    #[test]
+    fn test_rotate_y() {
+        // (1, 0, 0) rotated 90° around Y → (0, 0, -1)
+        let r = Vec3::new(1.0, 0.0, 0.0).rotate_y(std::f32::consts::FRAC_PI_2);
+        assert!(approx(r, Vec3::new(0.0, 0.0, -1.0)), "{r:?}");
+    }
+
+    #[test]
+    fn test_rotate_z() {
+        // (1, 0, 0) rotated 90° around Z → (0, 1, 0)
+        let r = Vec3::new(1.0, 0.0, 0.0).rotate_z(std::f32::consts::FRAC_PI_2);
+        assert!(approx(r, Vec3::new(0.0, 1.0, 0.0)), "{r:?}");
+    }
+
+    #[test]
+    fn test_to_vec4() {
+        let v4 = Vec3::new(1.0, 2.0, 3.0).to_vec4();
+        assert_eq!(v4, Vec4::new(1.0, 2.0, 3.0, 1.0));
     }
 }
