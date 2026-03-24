@@ -15,10 +15,6 @@ impl Vec2 {
         Self { x, y }
     }
 
-    pub fn scale(&self, factor: f32) -> Vec2 {
-        Vec2::new(self.x * factor, self.y * factor)
-    }
-
     pub fn dot(&self, other: Vec2) -> f32 {
         self.x * other.x + self.y * other.y
     }
@@ -129,11 +125,6 @@ mod tests {
     #[test]
     fn test_neg() {
         assert_eq!(-Vec2::new(1.0, -2.0), Vec2::new(-1.0, 2.0));
-    }
-
-    #[test]
-    fn test_scale() {
-        assert_eq!(Vec2::new(3.0, 4.0).scale(2.0), Vec2::new(6.0, 8.0));
     }
 
     #[test]

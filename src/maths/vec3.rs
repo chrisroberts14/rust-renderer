@@ -21,10 +21,6 @@ impl Vec3 {
         Self { x, y, z }
     }
 
-    pub fn scale(&self, factor: f32) -> Vec3 {
-        Vec3::new(self.x * factor, self.y * factor, self.z * factor)
-    }
-
     pub fn dot(&self, other: Vec3) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
@@ -196,14 +192,6 @@ mod tests {
     #[test]
     fn test_neg() {
         assert_eq!(-Vec3::new(1.0, -2.0, 3.0), Vec3::new(-1.0, 2.0, -3.0));
-    }
-
-    #[test]
-    fn test_scale() {
-        assert_eq!(
-            Vec3::new(1.0, 2.0, 3.0).scale(2.0),
-            Vec3::new(2.0, 4.0, 6.0)
-        );
     }
 
     #[test]
