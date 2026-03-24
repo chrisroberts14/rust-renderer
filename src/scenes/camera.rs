@@ -33,7 +33,7 @@ impl Camera {
             m: [
                 [r.x, r.y, r.z, -r.dot(p)],
                 [u.x, u.y, u.z, -u.dot(p)],
-                [-f.x, -f.y, -f.z, f.dot(p)], // 👈 KEEP THIS
+                [-f.x, -f.y, -f.z, f.dot(p)],
                 [0.0, 0.0, 0.0, 1.0],
             ],
         }
@@ -62,9 +62,7 @@ impl Camera {
     }
 
     pub fn right(&self) -> Vec3 {
-        Vec3::new(0.0, 1.0, 0.0)
-            .cross(self.forward()) // 👈 order matters
-            .normalise()
+        Vec3::new(0.0, 1.0, 0.0).cross(self.forward()).normalise()
     }
 
     pub fn up(&self) -> Vec3 {

@@ -2,7 +2,7 @@ use super::{TILE_SIZE, bin_triangles, draw_wireframe, prepare_object, rasterize_
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::scenes::camera::Camera;
-use crate::scenes::pointlight::PointLight;
+use crate::scenes::lights::pointlight::PointLight;
 use crate::tile::make_tiles;
 use rayon::prelude::*;
 
