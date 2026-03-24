@@ -7,15 +7,37 @@ use crate::geometry::triangle::Triangle;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
+use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
+use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
 use crate::tile::Tile;
+use clap::ValueEnum;
+use std::sync::Arc;
 
 pub(super) const TILE_SIZE: usize = 32;
 
 const AMBIENT: f32 = 0.15;
 const SHININESS: i32 = 32;
+
+/// Enum to allow for choosing a given Renderer
+/// Once a renderer is implemented it will need to be "registered" here
+#[derive(Clone, ValueEnum)]
+pub enum RendererChoice {
+    SingleThreadRaster,
+    MultiThreadRaster,
+}
+
+impl RendererChoice {
+    /// Turns the enum into an Arc pointer to the actual struct
+    pub fn into_renderer(self) -> Arc<dyn Renderer> {
+        match self {
+            RendererChoice::SingleThreadRaster => Arc::new(SingleThreadRasterRenderer),
+            RendererChoice::MultiThreadRaster => Arc::new(MultiThreadRasterRenderer),
+        }
+    }
+}
 
 /// The interface that all renderers must implement.
 ///
