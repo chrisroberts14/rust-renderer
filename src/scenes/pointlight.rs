@@ -24,9 +24,8 @@ impl PointLight {
     }
 
     pub fn intensity_at(&self, point: Vec3) -> f32 {
-        let distance_squared = (self.position.x - point.x).powi(2)
-            + (self.position.y - point.y).powi(2)
-            + (self.position.z - point.z).powi(2);
+        let diff = self.position - point;
+        let distance_squared = diff.dot(diff);
         self.intensity / (1.0 + distance_squared)
     }
 
