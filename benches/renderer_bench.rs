@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-
 /// To measure if any code improvements improved render time
 use criterion::{Criterion, criterion_group, criterion_main};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use rust_renderer::{create_from_file, scenes::scene::Scene};
 
@@ -9,11 +9,19 @@ const SIMPLE_SCENE_PATH: &str = "assets/scene_defs/simple.json";
 const COMPLEX_SCENE_PATH: &str = "assets/scene_defs/complex.json";
 
 fn simple_scene() -> Scene {
-    create_from_file(PathBuf::from(SIMPLE_SCENE_PATH)).expect("Failed to load simple scene")
+    create_from_file(
+        PathBuf::from(SIMPLE_SCENE_PATH),
+        Some(Arc::new(SingleThreadRasterRenderer)),
+    )
+    .expect("Failed to load simple scene")
 }
 
 fn complex_scene() -> Scene {
-    create_from_file(PathBuf::from(COMPLEX_SCENE_PATH)).expect("Failed to load complex scene")
+    create_from_file(
+        PathBuf::from(COMPLEX_SCENE_PATH),
+        Some(Arc::new(SingleThreadRasterRenderer)),
+    )
+    .expect("Failed to load complex scene")
 }
 
 fn bench_scene(c: &mut Criterion, name: &str, mut scene: Scene, wireframe: bool) {
@@ -58,6 +66,7 @@ criterion_group!(
 
 #[cfg(not(target_os = "windows"))]
 use pprof::criterion::{Output, PProfProfiler};
+use rust_renderer::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
 
 #[cfg(not(target_os = "windows"))]
 criterion_group! {

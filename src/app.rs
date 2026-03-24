@@ -12,7 +12,7 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
 use crate::renderer::Renderer;
-use crate::renderer::raster_renderer::RasterRenderer;
+use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
 use crate::scenes::scene::Scene;
 use std::sync::Arc;
 
@@ -35,7 +35,7 @@ impl App {
         width: f32,
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let renderer: Arc<dyn Renderer> = Arc::new(RasterRenderer);
+        let renderer: Arc<dyn Renderer> = Arc::new(MultiThreadRasterRenderer);
         match scene_option {
             Some(scene) => Ok(Self {
                 window: None,
