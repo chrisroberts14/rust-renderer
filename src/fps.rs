@@ -20,7 +20,7 @@ fn digit_bitmap(ch: char) -> [u8; 5] {
 pub struct FpsCounter {
     last_time: Instant,
     frame_count: u32,
-    pub fps: u32,
+    fps: u32,
 }
 
 impl Default for FpsCounter {

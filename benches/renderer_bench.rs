@@ -18,7 +18,7 @@ fn complex_scene() -> Scene {
 
 fn bench_scene(c: &mut Criterion, name: &str, mut scene: Scene, wireframe: bool) {
     if wireframe {
-        scene.settings.toggle_wire_frame_mode();
+        scene.toggle_wire_frame_mode();
     }
 
     c.bench_function(name, |b| {

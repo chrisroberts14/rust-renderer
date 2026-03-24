@@ -17,7 +17,7 @@ use std::time::Duration;
 /// Struct to return when creating the update thread
 ///
 /// This exists so we can define a method that stops the thread cleanly when it is dropped
-pub struct UpdateThread {
+pub(crate) struct UpdateThread {
     join_handle: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
@@ -44,12 +44,12 @@ impl Drop for UpdateThread {
 
 #[derive(Clone)]
 pub struct Scene {
-    pub objects: Arc<RwLock<Vec<Object>>>,
-    pub framebuffer: Framebuffer,
-    pub camera: Camera,
-    pub lights: Vec<PointLight>,
-    pub skybox: Option<Texture>,
-    pub update_thread: Option<UpdateThread>,
+    objects: Arc<RwLock<Vec<Object>>>,
+    pub(crate) framebuffer: Framebuffer,
+    pub(crate) camera: Camera,
+    lights: Vec<PointLight>,
+    skybox: Option<Texture>,
+    _update_thread: Option<UpdateThread>, // Exists solely so when it is dropped the thread is stopped cleanly
     pub(crate) settings: SceneSettings,
     renderer: Arc<dyn Renderer>,
 }
@@ -66,7 +66,7 @@ impl Scene {
         let running = Arc::new(AtomicBool::new(true));
 
         Self {
-            update_thread: Some(Self::spawn_update_thread_for(&objects, &running)),
+            _update_thread: Some(Self::spawn_update_thread_for(&objects, &running)),
             objects,
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
@@ -105,7 +105,7 @@ impl Scene {
         }
     }
 
-    pub fn spawn_update_thread(&self) -> UpdateThread {
+    pub(crate) fn spawn_update_thread(&self) -> UpdateThread {
         let running = Arc::new(AtomicBool::new(true));
         Self::spawn_update_thread_for(&self.objects, &running)
     }
@@ -154,6 +154,16 @@ impl Scene {
             self.renderer
                 .render_objects(&light_objects, &self.camera, &[], &self.framebuffer);
         }
+    }
+
+    /// Toggle rendering point lights as debug cubes
+    pub fn toggle_render_lights(&mut self) {
+        self.settings.toggle_render_lights();
+    }
+
+    /// Toggle wireframe rendering mode
+    pub fn toggle_wire_frame_mode(&mut self) {
+        self.settings.toggle_wire_frame_mode();
     }
 
     /// Helper method to render the whole scene

@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<AtomicU32>,
-    pub depth: Vec<AtomicU32>,
+    pixels: Vec<AtomicU32>,
+    depth: Vec<AtomicU32>,
 }
 
 /// Custom clone for framebuffer so we can copy scenes
