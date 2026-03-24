@@ -110,15 +110,19 @@ impl Scene {
         Self::spawn_update_thread_for(&self.objects, &running)
     }
 
-    pub fn render_objects(&mut self) {
-        let objects = self.objects.read().unwrap();
+    fn dispatch_render(&self, objects: &[Object], lights: &[PointLight]) {
         if self.settings.wire_frame_mode {
             self.renderer
-                .render_wireframe(&objects, &self.camera, &self.framebuffer);
+                .render_wireframe(objects, &self.camera, &self.framebuffer);
         } else {
             self.renderer
-                .render_objects(&objects, &self.camera, &self.lights, &self.framebuffer);
+                .render_objects(objects, &self.camera, lights, &self.framebuffer);
         }
+    }
+
+    pub fn render_objects(&mut self) {
+        let objects = self.objects.read().unwrap();
+        self.dispatch_render(&objects, &self.lights);
     }
 
     /// Renders small box representations of each point light for debugging.
@@ -146,14 +150,8 @@ impl Scene {
             })
             .collect();
 
-        if self.settings.wire_frame_mode {
-            self.renderer
-                .render_wireframe(&light_objects, &self.camera, &self.framebuffer);
-        } else {
-            // Pass empty lights — light boxes should appear unlit.
-            self.renderer
-                .render_objects(&light_objects, &self.camera, &[], &self.framebuffer);
-        }
+        // Pass empty lights — light boxes should appear unlit.
+        self.dispatch_render(&light_objects, &[]);
     }
 
     /// Toggle rendering point lights as debug cubes
