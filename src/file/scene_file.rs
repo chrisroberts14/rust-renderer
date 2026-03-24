@@ -1,7 +1,7 @@
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
     renderer::Renderer,
-    scenes::{material::Material, pointlight::PointLight, scene::Scene},
+    scenes::{lights::pointlight::PointLight, material::Material, scene::Scene},
 };
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
