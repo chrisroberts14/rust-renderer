@@ -5,6 +5,7 @@ use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::material::Material;
 use crate::scenes::pointlight::PointLight;
+use crate::scenes::scene_settings::SceneSettings;
 use crate::scenes::texture::Texture;
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,35 +13,6 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-
-#[derive(Clone)]
-pub struct SceneSettings {
-    pub render_lights: bool,
-    pub wire_frame_mode: bool,
-}
-
-impl Default for SceneSettings {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SceneSettings {
-    pub fn new() -> Self {
-        Self {
-            render_lights: false,
-            wire_frame_mode: false,
-        }
-    }
-
-    pub fn toggle_render_lights(&mut self) {
-        self.render_lights = !self.render_lights;
-    }
-
-    pub fn toggle_wire_frame_mode(&mut self) {
-        self.wire_frame_mode = !self.wire_frame_mode;
-    }
-}
 
 /// Struct to return when creating the update thread
 ///
@@ -76,9 +48,9 @@ pub struct Scene {
     pub framebuffer: Framebuffer,
     pub camera: Camera,
     pub lights: Vec<PointLight>,
-    pub settings: SceneSettings,
     pub skybox: Option<Texture>,
     pub update_thread: Option<UpdateThread>,
+    pub(crate) settings: SceneSettings,
     renderer: Arc<dyn Renderer>,
 }
 
