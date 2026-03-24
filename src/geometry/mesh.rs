@@ -2,7 +2,6 @@ use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Mesh {
     pub vertices: Vec<Vec3>,
     pub faces: Vec<(usize, usize, usize)>,

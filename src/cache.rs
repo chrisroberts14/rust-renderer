@@ -9,14 +9,12 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 
 /// LRU Cache of a given size
-#[allow(dead_code)]
 pub struct LruCache<K, V> {
     capacity: usize,
     map: HashMap<K, V>,
     order: VecDeque<K>,
 }
 
-#[allow(dead_code)]
 impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
     pub fn new(capacity: usize) -> Self {
         Self {

@@ -12,7 +12,6 @@ pub struct Vec4 {
     pub w: f32,
 }
 
-#[allow(dead_code)]
 impl Vec4 {
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self { x, y, z, w }
@@ -83,5 +82,59 @@ impl Mul<f32> for Vec4 {
             z: self.z * scalar,
             w: self.w * scalar,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        assert_eq!(
+            Vec4::new(1.0, 2.0, 3.0, 4.0) + Vec4::new(5.0, 6.0, 7.0, 8.0),
+            Vec4::new(6.0, 8.0, 10.0, 12.0)
+        );
+    }
+
+    #[test]
+    fn test_sub() {
+        assert_eq!(
+            Vec4::new(5.0, 6.0, 7.0, 8.0) - Vec4::new(1.0, 2.0, 3.0, 4.0),
+            Vec4::new(4.0, 4.0, 4.0, 4.0)
+        );
+    }
+
+    #[test]
+    fn test_mul_scalar() {
+        assert_eq!(
+            Vec4::new(1.0, 2.0, 3.0, 4.0) * 2.0,
+            Vec4::new(2.0, 4.0, 6.0, 8.0)
+        );
+    }
+
+    #[test]
+    fn test_from_vec3() {
+        let v3 = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!(Vec4::from_vec3(v3, 5.0), Vec4::new(1.0, 2.0, 3.0, 5.0));
+    }
+
+    #[test]
+    fn test_to_vec3_drops_w() {
+        assert_eq!(
+            Vec4::new(1.0, 2.0, 3.0, 99.0).to_vec3(),
+            Vec3::new(1.0, 2.0, 3.0)
+        );
+    }
+
+    #[test]
+    fn test_perspective_divide() {
+        let result = Vec4::new(2.0, 4.0, 6.0, 2.0).perspective_divide().unwrap();
+        assert_eq!(result, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_perspective_divide_zero_w_is_err() {
+        assert!(Vec4::new(1.0, 2.0, 3.0, 0.0).perspective_divide().is_err());
     }
 }

@@ -16,7 +16,6 @@ pub struct Vec3 {
     pub z: f32,
 }
 
-#[allow(dead_code)]
 impl Vec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }

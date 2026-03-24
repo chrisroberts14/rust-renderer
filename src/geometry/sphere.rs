@@ -3,10 +3,8 @@ use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use std::f32::consts::PI;
 
-#[allow(dead_code)]
 pub struct Sphere;
 
-#[allow(dead_code)]
 impl Sphere {
     pub fn mesh(radius: f32, stacks: u32, slices: u32) -> Mesh {
         let mut vertices = vec![];

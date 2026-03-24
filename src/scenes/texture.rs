@@ -8,7 +8,6 @@ pub struct Texture {
     rgba: Vec<u8>,
 }
 
-#[allow(dead_code)]
 impl Texture {
     pub fn new(width: u32, height: u32, rgba: Vec<u8>) -> Self {
         Self {
