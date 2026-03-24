@@ -1,7 +1,11 @@
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
     renderer::Renderer,
-    scenes::{lights::pointlight::PointLight, material::Material, scene::Scene},
+    scenes::{
+        lights::{Light, pointlight::PointLight},
+        material::Material,
+        scene::Scene,
+    },
 };
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
@@ -15,6 +19,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Enum covering every supported light type.
+///
+/// Each variant is identified in JSON by a `"type"` field, e.g. `"type": "point"`.
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum LightSchema {
+    Point(PointLight),
+}
+
+impl LightSchema {
+    fn into_arc_light(self) -> Arc<dyn Light> {
+        match self {
+            LightSchema::Point(pl) => Arc::new(pl),
+        }
+    }
+}
+
 /// This is a struct representing the whole file
 ///
 /// For the initial implementation there are only lights and objects no skybox defined
@@ -24,7 +45,7 @@ use std::{
 pub struct SceneFile {
     // We limit the scene files to paths to obj files
     objects: Vec<ObjectSchema>,
-    lights: Vec<PointLight>,
+    lights: Vec<LightSchema>,
 }
 
 /// Schema for an individual object.
@@ -70,11 +91,18 @@ impl SceneFile {
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        let lights: Vec<Arc<dyn Light>> = scene
+            .lights
+            .into_iter()
+            .map(|l| l.into_arc_light())
+            .collect();
+
         Ok(Scene::new(
             window_width,
             window_height,
             objs,
-            scene.lights,
+            lights,
             renderer,
         ))
     }

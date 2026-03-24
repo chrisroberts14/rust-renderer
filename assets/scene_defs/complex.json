@@ -35,16 +35,19 @@
     ],
     "lights": [
         {
+            "type": "point",
             "position": [0, 0, 5],
             "colour": [1, 0, 0],
             "intensity": 15
         },
         {
+            "type": "point",
             "position": [5, 0, 0],
             "colour": [0, 1, 0],
             "intensity": 20
         },
         {
+            "type": "point",
             "position": [-5, 0, 0],
             "colour": [0, 0, 1],
             "intensity": 15

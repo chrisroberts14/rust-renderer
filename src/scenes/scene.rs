@@ -3,7 +3,7 @@ use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
-use crate::scenes::lights::pointlight::PointLight;
+use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use crate::scenes::scene_settings::SceneSettings;
 use crate::scenes::texture::Texture;
@@ -47,7 +47,7 @@ pub struct Scene {
     objects: Arc<RwLock<Vec<Object>>>,
     pub(crate) framebuffer: Framebuffer,
     pub(crate) camera: Camera,
-    lights: Vec<PointLight>,
+    lights: Vec<Arc<dyn Light>>,
     skybox: Option<Texture>,
     _update_thread: Option<UpdateThread>, // Exists solely so when it is dropped the thread is stopped cleanly
     pub(crate) settings: SceneSettings,
@@ -59,7 +59,7 @@ impl Scene {
         width: f32,
         height: f32,
         objects: Vec<Object>,
-        lights: Vec<PointLight>,
+        lights: Vec<Arc<dyn Light>>,
         renderer: Arc<dyn Renderer>,
     ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
@@ -110,7 +110,7 @@ impl Scene {
         Self::spawn_update_thread_for(&self.objects, &running)
     }
 
-    fn dispatch_render(&self, objects: &[Object], lights: &[PointLight]) {
+    fn dispatch_render(&self, objects: &[Object], lights: &[Arc<dyn Light>]) {
         if self.settings.wire_frame_mode {
             self.renderer
                 .render_wireframe(objects, &self.camera, &self.framebuffer);
@@ -132,16 +132,17 @@ impl Scene {
             .lights
             .iter()
             .map(|light| {
+                let c = light.colour();
                 let colour = [
-                    (light.colour[0] * 255.0) as u8,
-                    (light.colour[1] * 255.0) as u8,
-                    (light.colour[2] * 255.0) as u8,
+                    (c[0] * 255.0) as u8,
+                    (c[1] * 255.0) as u8,
+                    (c[2] * 255.0) as u8,
                     255,
                 ];
                 Object::new(
                     Cube::mesh(1.0),
                     Transform {
-                        position: light.position,
+                        position: light.position(),
                         rotation: Vec3::ZERO,
                         scale: Vec3::new(0.1, 0.1, 0.1),
                     },
@@ -151,7 +152,7 @@ impl Scene {
             .collect();
 
         // Pass empty lights — light boxes should appear unlit.
-        self.dispatch_render(&light_objects, &[]);
+        self.dispatch_render(&light_objects, &[] as &[Arc<dyn Light>]);
     }
 
     /// Toggle rendering point lights as debug cubes

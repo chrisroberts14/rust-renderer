@@ -2,9 +2,10 @@ use super::{TILE_SIZE, bin_triangles, draw_wireframe, prepare_object, rasterize_
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::scenes::camera::Camera;
-use crate::scenes::lights::pointlight::PointLight;
+use crate::scenes::lights::Light;
 use crate::tile::make_tiles;
 use rayon::prelude::*;
+use std::sync::Arc;
 
 pub struct MultiThreadRasterRenderer;
 
@@ -13,7 +14,7 @@ impl super::Renderer for MultiThreadRasterRenderer {
         &self,
         objects: &[Object],
         camera: &Camera,
-        lights: &[PointLight],
+        lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
     ) {
         let width = framebuffer.width as f32;

@@ -10,7 +10,7 @@ use crate::maths::vec3::Vec3;
 use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
 use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use crate::scenes::camera::Camera;
-use crate::scenes::lights::pointlight::PointLight;
+use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use crate::tile::Tile;
 use clap::ValueEnum;
@@ -50,7 +50,7 @@ pub trait Renderer {
         &self,
         objects: &[Object],
         camera: &Camera,
-        lights: &[PointLight],
+        lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
     );
 
@@ -140,7 +140,7 @@ fn clip_near(vertices: [Vert; 3], near: f32) -> [Option<[Vert; 3]>; 2] {
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).
-fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[PointLight]) -> [f32; 3] {
+fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[Arc<dyn Light>]) -> [f32; 3] {
     if lights.is_empty() {
         return [1.0; 3];
     }
@@ -316,7 +316,7 @@ pub(super) fn rasterize_tile(
     triangle_indices: &[usize],
     triangles: &[PreparedTriangle],
     camera: &Camera,
-    lights: &[PointLight],
+    lights: &[Arc<dyn Light>],
     framebuffer: &Framebuffer,
 ) {
     let tile_min_x = tile.x as i32;

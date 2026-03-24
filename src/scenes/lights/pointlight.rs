@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::maths::vec3::Vec3;
+use crate::scenes::lights::Light;
 
 #[derive(Deserialize, JsonSchema, Clone)]
 pub struct PointLight {
@@ -18,23 +19,33 @@ impl PointLight {
             intensity,
         }
     }
+}
 
-    pub fn direction_to(&self, point: Vec3) -> Vec3 {
+impl Light for PointLight {
+    fn direction_to(&self, point: Vec3) -> Vec3 {
         (self.position - point).normalise()
     }
 
-    pub fn intensity_at(&self, point: Vec3) -> f32 {
+    fn intensity_at(&self, point: Vec3) -> f32 {
         let diff = self.position - point;
         let distance_squared = diff.dot(diff);
         self.intensity / (1.0 + distance_squared)
     }
 
-    pub fn colour_at(&self, point: Vec3) -> [f32; 3] {
+    fn colour_at(&self, point: Vec3) -> [f32; 3] {
         let intensity = self.intensity_at(point);
         [
             self.colour[0] * intensity,
             self.colour[1] * intensity,
             self.colour[2] * intensity,
         ]
+    }
+
+    fn position(&self) -> Vec3 {
+        self.position
+    }
+
+    fn colour(&self) -> [f32; 3] {
+        self.colour
     }
 }
