@@ -70,14 +70,14 @@ fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
 }
 
 /// Clips a triangle against the near plane (z = -near in camera space).
-/// Returns 0, 1, or 2 triangles.
-fn clip_near(vertices: [Vert; 3], near: f32) -> Vec<[Vert; 3]> {
+/// Returns 0, 1, or 2 triangles as a fixed-size stack-allocated array of Options.
+fn clip_near(vertices: [Vert; 3], near: f32) -> [Option<[Vert; 3]>; 2] {
     let inside: [bool; 3] = vertices.map(|v| v.cam.z <= -near);
     let n_inside = inside.iter().filter(|&&b| b).count();
 
     match n_inside {
-        0 => vec![],
-        3 => vec![vertices],
+        0 => [None, None],
+        3 => [Some(vertices), None],
         1 => {
             let in_idx = (0..3).find(|&i| inside[i]).unwrap();
             let [out0, out1] = (0..3)
@@ -93,7 +93,7 @@ fn clip_near(vertices: [Vert; 3], near: f32) -> Vec<[Vert; 3]> {
             let ab = interpolate_vert(a, b, (-near - a.cam.z) / (b.cam.z - a.cam.z));
             let ac = interpolate_vert(a, c, (-near - a.cam.z) / (c.cam.z - a.cam.z));
 
-            vec![[a, ab, ac]]
+            [Some([a, ab, ac]), None]
         }
         2 => {
             let out_idx = (0..3).find(|&i| !inside[i]).unwrap();
@@ -110,7 +110,7 @@ fn clip_near(vertices: [Vert; 3], near: f32) -> Vec<[Vert; 3]> {
             let ac = interpolate_vert(a, c, (-near - a.cam.z) / (c.cam.z - a.cam.z));
             let bc = interpolate_vert(b, c, (-near - b.cam.z) / (c.cam.z - b.cam.z));
 
-            vec![[a, b, bc], [a, bc, ac]]
+            [Some([a, b, bc]), Some([a, bc, ac])]
         }
         _ => unreachable!(),
     }
@@ -216,7 +216,7 @@ pub(super) fn prepare_object(
         };
 
         // Clip against the near plane. This may produce 0, 1, or 2 triangles.
-        for [v0, v1, v2] in clip_near([v0, v1, v2], camera_near) {
+        for [v0, v1, v2] in clip_near([v0, v1, v2], camera_near).into_iter().flatten() {
             // Project camera-space positions to 2D screen coordinates.
             // z values are NDC depth, kept for depth interpolation during rasterization.
             let ((p0, z0), (p1, z1), (p2, z2)) =
