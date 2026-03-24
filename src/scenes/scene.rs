@@ -142,7 +142,7 @@ impl Scene {
                     Cube::mesh(1.0),
                     Transform {
                         position: light.position,
-                        rotation: Vec3::new(0.0, 0.0, 0.0),
+                        rotation: Vec3::ZERO,
                         scale: Vec3::new(0.1, 0.1, 0.1),
                     },
                     Material::Color(colour),

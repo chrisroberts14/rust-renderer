@@ -28,7 +28,7 @@ impl Mesh {
     }
 
     fn compute_vertex_normals(vertices: &[Vec3], faces: &[(usize, usize, usize)]) -> Vec<Vec3> {
-        let mut normals = vec![Vec3::new(0.0, 0.0, 0.0); vertices.len()];
+        let mut normals = vec![Vec3::ZERO; vertices.len()];
 
         for (i0, i1, i2) in faces {
             let v0 = vertices[*i0];

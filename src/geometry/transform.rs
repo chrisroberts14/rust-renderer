@@ -13,17 +13,17 @@ pub struct Transform {
 impl Transform {
     pub fn new() -> Self {
         Self {
-            position: Vec3::new(0.0, 0.0, 0.0),
-            rotation: Vec3::new(0.0, 0.0, 0.0),
-            scale: Vec3::new(1.0, 1.0, 1.0),
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
         }
     }
 
     pub fn in_position(position: Vec3) -> Self {
         Self {
             position,
-            rotation: Vec3::new(0.0, 0.0, 0.0),
-            scale: Vec3::new(1.0, 1.0, 1.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
         }
     }
 
