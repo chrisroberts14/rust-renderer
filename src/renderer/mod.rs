@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 pub(super) const TILE_SIZE: usize = 32;
 
-const AMBIENT: f32 = 0.15;
 const SHININESS: i32 = 32;
 
 /// Enum to allow for choosing a given Renderer
@@ -52,6 +51,7 @@ pub trait Renderer {
         camera: &Camera,
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
+        ambient: f32,
     );
 
     /// Render all objects as wireframe outlines.
@@ -149,7 +149,13 @@ fn clip_to_frustum(triangle: [Vert; 3], camera: &Camera) -> Vec<[Vert; 3]> {
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).
-fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[Arc<dyn Light>]) -> [f32; 3] {
+fn shade(
+    normal: Vec3,
+    world_pos: Vec3,
+    view_dir: Vec3,
+    lights: &[Arc<dyn Light>],
+    ambient: f32,
+) -> [f32; 3] {
     if lights.is_empty() {
         return [1.0; 3];
     }
@@ -175,11 +181,11 @@ fn shade(normal: Vec3, world_pos: Vec3, view_dir: Vec3, lights: &[Arc<dyn Light>
             specular_rgb[i] += specular * light_colour[i];
         }
     }
-    let inv_ambient = 1.0 - AMBIENT;
+    let inv_ambient = 1.0 - ambient;
     [
-        (AMBIENT + inv_ambient * diffuse_rgb[0] + specular_rgb[0]).min(1.0),
-        (AMBIENT + inv_ambient * diffuse_rgb[1] + specular_rgb[1]).min(1.0),
-        (AMBIENT + inv_ambient * diffuse_rgb[2] + specular_rgb[2]).min(1.0),
+        (ambient + inv_ambient * diffuse_rgb[0] + specular_rgb[0]).min(1.0),
+        (ambient + inv_ambient * diffuse_rgb[1] + specular_rgb[1]).min(1.0),
+        (ambient + inv_ambient * diffuse_rgb[2] + specular_rgb[2]).min(1.0),
     ]
 }
 
@@ -327,6 +333,7 @@ pub(super) fn rasterize_tile(
     camera: &Camera,
     lights: &[Arc<dyn Light>],
     framebuffer: &Framebuffer,
+    ambient: f32,
 ) {
     let tile_min_x = tile.x as i32;
     let tile_min_y = tile.y as i32;
@@ -371,7 +378,7 @@ pub(super) fn rasterize_tile(
                         let world_pos = v0.world * w0 + v1.world * w1 + v2.world * w2;
                         let view_dir = (camera.position - world_pos).normalise();
 
-                        let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights);
+                        let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights, ambient);
 
                         let [cr, cg, cb, ca] = match &tri.material {
                             Material::Color(c) => *c,

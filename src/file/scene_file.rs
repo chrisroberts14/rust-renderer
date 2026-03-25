@@ -26,6 +26,11 @@ fn default_subdivisions() -> u32 {
     8
 }
 
+/// The default ambient light if none is specified in the file
+fn default_ambient_light() -> f32 {
+    0.15
+}
+
 /// Schema for an individual object.
 ///
 /// Use `"type": "mesh"` for OBJ files and `"type": "plane"` for a flat quad primitive.
@@ -112,6 +117,8 @@ impl LightSchema {
 pub struct SceneFile {
     objects: Vec<ObjectSchema>,
     lights: Vec<LightSchema>,
+    #[serde(default = "default_ambient_light")]
+    ambient: f32,
 }
 
 impl SceneFile {
@@ -148,6 +155,7 @@ impl SceneFile {
             objs,
             lights,
             renderer,
+            scene.ambient,
         ))
     }
 }

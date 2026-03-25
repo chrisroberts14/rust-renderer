@@ -52,6 +52,7 @@ pub struct Scene {
     _update_thread: Option<UpdateThread>, // Exists solely so when it is dropped the thread is stopped cleanly
     pub(crate) settings: SceneSettings,
     renderer: Arc<dyn Renderer>,
+    ambient: f32,
 }
 
 impl Scene {
@@ -61,6 +62,7 @@ impl Scene {
         objects: Vec<Object>,
         lights: Vec<Arc<dyn Light>>,
         renderer: Arc<dyn Renderer>,
+        ambient: f32,
     ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
         let running = Arc::new(AtomicBool::new(true));
@@ -74,6 +76,7 @@ impl Scene {
             settings: SceneSettings::new(),
             skybox: None,
             renderer,
+            ambient,
         }
     }
 
@@ -112,8 +115,13 @@ impl Scene {
             self.renderer
                 .render_wireframe(objects, &self.camera, &self.framebuffer);
         } else {
-            self.renderer
-                .render_objects(objects, &self.camera, lights, &self.framebuffer);
+            self.renderer.render_objects(
+                objects,
+                &self.camera,
+                lights,
+                &self.framebuffer,
+                self.ambient,
+            );
         }
     }
 

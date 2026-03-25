@@ -16,6 +16,7 @@ impl super::Renderer for MultiThreadRasterRenderer {
         camera: &Camera,
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
+        ambient: f32,
     ) {
         let width = framebuffer.width as f32;
         let height = framebuffer.height as f32;
@@ -34,7 +35,15 @@ impl super::Renderer for MultiThreadRasterRenderer {
             .par_iter()
             .zip(bins.par_iter())
             .for_each(|(tile, tri_indices)| {
-                rasterize_tile(tile, tri_indices, &triangles, camera, lights, framebuffer);
+                rasterize_tile(
+                    tile,
+                    tri_indices,
+                    &triangles,
+                    camera,
+                    lights,
+                    framebuffer,
+                    ambient,
+                );
             });
     }
 
