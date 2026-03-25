@@ -1,4 +1,5 @@
 pub mod pointlight;
+pub mod spot_light;
 
 use crate::maths::vec3::Vec3;
 

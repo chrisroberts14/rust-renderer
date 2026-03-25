@@ -1,3 +1,4 @@
+use crate::scenes::lights::spot_light::SpotLight;
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
     renderer::Renderer,
@@ -79,12 +80,14 @@ impl ObjectSchema {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum LightSchema {
     Point(PointLight),
+    Spot(SpotLight),
 }
 
 impl LightSchema {
     fn into_arc_light(self) -> Arc<dyn Light> {
         match self {
             LightSchema::Point(pl) => Arc::new(pl),
+            LightSchema::Spot(sp) => Arc::new(sp),
         }
     }
 }

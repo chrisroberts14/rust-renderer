@@ -46,6 +46,15 @@
             "position": [-5, 0, 0],
             "colour": [0, 0, 1],
             "intensity": 15
+        },
+        {
+            "type": "spot",
+            "position": [0, 5, 0],
+            "direction": [0, -1, 0],
+            "colour": [1, 1, 1],
+            "intensity": 50,
+            "cone_angle": 0.785398,
+            "falloff_angle": 1.5708
         }
     ]
 }
