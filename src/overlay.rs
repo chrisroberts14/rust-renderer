@@ -23,12 +23,12 @@ impl StatsOverlay {
     }
 
     pub fn write_to_framebuffer(&self, framebuffer: &mut Framebuffer) {
-        let mut y = 0;
+        let mut y = 3;
         self.stats.iter().for_each(|(key, value)| {
             draw_text(
                 framebuffer,
                 format!("{}: {}", key, value).as_str(),
-                0,
+                3,
                 y,
                 [255, 255, 255, 255],
                 3,
