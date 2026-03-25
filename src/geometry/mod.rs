@@ -6,3 +6,4 @@ pub mod plane;
 pub mod sphere;
 pub mod transform;
 pub mod triangle;
+pub mod update_thread;

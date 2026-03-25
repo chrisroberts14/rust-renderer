@@ -1,5 +1,6 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
+use crate::geometry::update_thread::{UpdateThread, spawn_update_thread_for};
 use crate::maths::vec3::Vec3;
 use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
@@ -8,39 +9,8 @@ use crate::scenes::material::Material;
 use crate::scenes::scene_settings::SceneSettings;
 use crate::scenes::texture::Texture;
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::thread;
-use std::thread::JoinHandle;
-use std::time::Duration;
-
-/// Struct to return when creating the update thread
-///
-/// This exists so we can define a method that stops the thread cleanly when it is dropped
-pub(crate) struct UpdateThread {
-    join_handle: Option<JoinHandle<()>>,
-    running: Arc<AtomicBool>,
-}
-
-/// This custom clone implementation doesn't actually copy anything it solely is used for simplicity
-/// in benchmarks
-impl Clone for UpdateThread {
-    fn clone(&self) -> Self {
-        Self {
-            join_handle: None,
-            running: self.running.clone(),
-        }
-    }
-}
-
-impl Drop for UpdateThread {
-    fn drop(&mut self) {
-        self.running.store(false, Ordering::SeqCst);
-        if let Some(handle) = self.join_handle.take() {
-            let _ = handle.join(); // ignore join errors during drop
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct Scene {
@@ -68,7 +38,7 @@ impl Scene {
         let running = Arc::new(AtomicBool::new(true));
 
         Self {
-            _update_thread: Some(Self::spawn_update_thread_for(&objects, &running)),
+            _update_thread: Some(spawn_update_thread_for(&objects, &running)),
             objects,
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
@@ -80,34 +50,9 @@ impl Scene {
         }
     }
 
-    /// Spawn a thread that calls each object's registered update function every ~16 ms.
-    /// Returns an `UpdateThread` whose `Drop` impl stops it cleanly.
-    fn spawn_update_thread_for(
-        objects: &Arc<RwLock<Vec<Object>>>,
-        running: &Arc<AtomicBool>,
-    ) -> UpdateThread {
-        let objects = Arc::clone(objects);
-        let thread_running = Arc::clone(running);
-        let handle = thread::spawn(move || {
-            while thread_running.load(Ordering::Relaxed) {
-                {
-                    let mut objs = objects.write().unwrap();
-                    for object in objs.iter_mut() {
-                        object.update();
-                    }
-                }
-                thread::sleep(Duration::from_millis(16));
-            }
-        });
-        UpdateThread {
-            join_handle: Some(handle),
-            running: Arc::clone(running),
-        }
-    }
-
     pub(crate) fn spawn_update_thread(&self) -> UpdateThread {
         let running = Arc::new(AtomicBool::new(true));
-        Self::spawn_update_thread_for(&self.objects, &running)
+        spawn_update_thread_for(&self.objects, &running)
     }
 
     fn dispatch_render(&self, objects: &[Object], lights: &[Arc<dyn Light>]) {
