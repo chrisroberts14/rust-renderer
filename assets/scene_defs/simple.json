@@ -1,10 +1,29 @@
 {
     "objects": [
         {
+            "type": "mesh",
             "obj_path": "assets/monkey.obj",
             "transform": {
                 "position": [0, 0, 0],
                 "rotation": [0, 0, 0],
+                "scale": [1, 1, 1]
+            }
+        },
+        {
+            "type": "plane",
+            "size": 20,
+            "transform": {
+                "position": [0, -1.5, 0],
+                "rotation": [0, 0, 0],
+                "scale": [1, 1, 1]
+            }
+        },
+        {
+            "type": "plane",
+            "size": 20,
+            "transform": {
+                "position": [0, 0, -5],
+                "rotation": [1.5708, 0, 0],
                 "scale": [1, 1, 1]
             }
         }

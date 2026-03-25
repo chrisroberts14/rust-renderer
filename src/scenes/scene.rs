@@ -77,8 +77,8 @@ impl Scene {
         }
     }
 
-    /// Spawn a thread that continuously updates object transforms.
-    /// Returns the join handle and a shutdown flag — set the flag to false and join the handle to stop the thread cleanly.
+    /// Spawn a thread that calls each object's registered update function every ~16 ms.
+    /// Returns an `UpdateThread` whose `Drop` impl stops it cleanly.
     fn spawn_update_thread_for(
         objects: &Arc<RwLock<Vec<Object>>>,
         running: &Arc<AtomicBool>,
@@ -90,10 +90,7 @@ impl Scene {
                 {
                     let mut objs = objects.write().unwrap();
                     for object in objs.iter_mut() {
-                        object.transform.rotation.x =
-                            (object.transform.rotation.x + 0.01) % (2.0 * std::f32::consts::PI);
-                        object.transform.rotation.y =
-                            (object.transform.rotation.y + 0.01) % (2.0 * std::f32::consts::PI);
+                        object.update();
                     }
                 }
                 thread::sleep(Duration::from_millis(16));

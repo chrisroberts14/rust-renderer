@@ -1,5 +1,5 @@
 use crate::{
-    geometry::{obj_loader::ObjLoader, object::Object, transform::Transform},
+    geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
     renderer::Renderer,
     scenes::{
         lights::{Light, pointlight::PointLight},
@@ -10,14 +10,60 @@ use crate::{
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::Arc;
 /// This file defines the schema for json files which specify a given scene to render
 ///
 /// We also define the reading and validation
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path};
+
+fn default_colour() -> [u8; 4] {
+    [255, 255, 255, 255]
+}
+
+/// Schema for an individual object.
+///
+/// Use `"type": "mesh"` for OBJ files and `"type": "plane"` for a flat quad primitive.
+#[derive(JsonSchema, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ObjectSchema {
+    Mesh {
+        obj_path: PathBuf,
+        transform: Transform,
+        #[serde(default = "default_colour")]
+        colour: [u8; 4],
+    },
+    Plane {
+        size: f32,
+        transform: Transform,
+        #[serde(default = "default_colour")]
+        colour: [u8; 4],
+    },
+}
+
+impl ObjectSchema {
+    fn into_object(self) -> Result<Object, Box<dyn Error>> {
+        match self {
+            ObjectSchema::Mesh {
+                obj_path,
+                transform,
+                colour,
+            } => {
+                let mesh = ObjLoader::load(obj_path)?;
+                Ok(Object::new(mesh, transform, Material::Color(colour)))
+            }
+            ObjectSchema::Plane {
+                size,
+                transform,
+                colour,
+            } => Ok(Object::new(
+                Plane::mesh(size),
+                transform,
+                Material::Color(colour),
+            )),
+        }
+    }
+}
 
 /// Enum covering every supported light type.
 ///
@@ -43,20 +89,8 @@ impl LightSchema {
 /// TODO: Add skybox
 #[derive(JsonSchema, Deserialize)]
 pub struct SceneFile {
-    // We limit the scene files to paths to obj files
     objects: Vec<ObjectSchema>,
     lights: Vec<LightSchema>,
-}
-
-/// Schema for an individual object.
-///
-/// Initial implementation only allows for pre-defined obj files to be used in the scene
-///
-/// TODO: Add some way to create arbitrary shapes
-#[derive(JsonSchema, Deserialize)]
-struct ObjectSchema {
-    obj_path: PathBuf,
-    transform: Transform,
 }
 
 impl SceneFile {
@@ -72,24 +106,13 @@ impl SceneFile {
         window_height: f32,
         renderer: Arc<dyn Renderer>,
     ) -> Result<Scene, Box<dyn Error>> {
-        // Read in the data from the file
         let data = fs::read_to_string(path)?;
         let scene: SceneFile = serde_json::from_str(&data)?;
 
-        // Create object vec from the object schema objects read from the JSON file
-        // TODO: Add way of reading in materials at the moment the Arc pointer to textures make this
-        // inconvenient
         let objs: Vec<Object> = scene
             .objects
-            .iter()
-            .map(|obj| {
-                let obj_from_file = ObjLoader::load(obj.obj_path.clone())?;
-                Ok::<Object, Box<dyn Error>>(Object::new(
-                    obj_from_file,
-                    obj.transform.clone(),
-                    Material::Color([255, 255, 255, 255]),
-                ))
-            })
+            .into_iter()
+            .map(|obj| obj.into_object())
             .collect::<Result<Vec<_>, _>>()?;
 
         let lights: Vec<Arc<dyn Light>> = scene
