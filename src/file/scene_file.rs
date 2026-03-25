@@ -21,6 +21,10 @@ fn default_colour() -> [u8; 4] {
     [255, 255, 255, 255]
 }
 
+fn default_subdivisions() -> u32 {
+    8
+}
+
 /// Schema for an individual object.
 ///
 /// Use `"type": "mesh"` for OBJ files and `"type": "plane"` for a flat quad primitive.
@@ -35,6 +39,8 @@ enum ObjectSchema {
     },
     Plane {
         size: f32,
+        #[serde(default = "default_subdivisions")]
+        subdivisions: u32,
         transform: Transform,
         #[serde(default = "default_colour")]
         colour: [u8; 4],
@@ -54,10 +60,11 @@ impl ObjectSchema {
             }
             ObjectSchema::Plane {
                 size,
+                subdivisions,
                 transform,
                 colour,
             } => Ok(Object::new(
-                Plane::mesh(size),
+                Plane::mesh(size, subdivisions),
                 transform,
                 Material::Color(colour),
             )),

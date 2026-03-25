@@ -91,51 +91,60 @@ fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
     }
 }
 
-/// Clips a triangle against the near plane (z = -near in camera space).
-/// Returns 0, 1, or 2 triangles as a fixed-size stack-allocated array of Options.
-fn clip_near(vertices: [Vert; 3], near: f32) -> [Option<[Vert; 3]>; 2] {
-    let inside: [bool; 3] = vertices.map(|v| v.cam.z <= -near);
-    let n_inside = inside.iter().filter(|&&b| b).count();
-
-    match n_inside {
-        0 => [None, None],
-        3 => [Some(vertices), None],
-        1 => {
-            let in_idx = (0..3).find(|&i| inside[i]).unwrap();
-            let [out0, out1] = (0..3)
-                .filter(|&i| !inside[i])
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            let a: Vert = vertices[in_idx];
-            let b: Vert = vertices[out0];
-            let c: Vert = vertices[out1];
-
-            let ab = interpolate_vert(a, b, (-near - a.cam.z) / (b.cam.z - a.cam.z));
-            let ac = interpolate_vert(a, c, (-near - a.cam.z) / (c.cam.z - a.cam.z));
-
-            [Some([a, ab, ac]), None]
-        }
-        2 => {
-            let out_idx = (0..3).find(|&i| !inside[i]).unwrap();
-            let [in0, in1] = (0..3)
-                .filter(|&i| inside[i])
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            let a: Vert = vertices[in0];
-            let b: Vert = vertices[in1];
-            let c: Vert = vertices[out_idx];
-
-            let ac = interpolate_vert(a, c, (-near - a.cam.z) / (c.cam.z - a.cam.z));
-            let bc = interpolate_vert(b, c, (-near - b.cam.z) / (c.cam.z - b.cam.z));
-
-            [Some([a, b, bc]), Some([a, bc, ac])]
-        }
-        _ => unreachable!(),
+/// Clips a convex polygon against a single camera-space half-space defined by
+/// `nx*x + ny*y + nz*z + d >= 0` (inside). Uses Sutherland-Hodgman.
+fn clip_polygon_against_plane(polygon: &[Vert], nx: f32, ny: f32, nz: f32, d: f32) -> Vec<Vert> {
+    if polygon.is_empty() {
+        return Vec::new();
     }
+    let dist = |v: &Vert| nx * v.cam.x + ny * v.cam.y + nz * v.cam.z + d;
+    let mut output = Vec::new();
+    let n = polygon.len();
+    for i in 0..n {
+        let cur = polygon[i];
+        let next = polygon[(i + 1) % n];
+        let d_cur = dist(&cur);
+        let d_next = dist(&next);
+        if d_cur >= 0.0 {
+            output.push(cur);
+        }
+        if (d_cur >= 0.0) != (d_next >= 0.0) {
+            let t = d_cur / (d_cur - d_next);
+            output.push(interpolate_vert(cur, next, t));
+        }
+    }
+    output
+}
+
+/// Clips a triangle against all 6 frustum planes and returns the resulting triangles.
+/// Eliminates any vertex that would project far outside the screen, preventing the
+/// f32 precision failures that occur with very large screen-space triangles.
+fn clip_to_frustum(triangle: [Vert; 3], camera: &Camera) -> Vec<[Vert; 3]> {
+    let tan_y = (camera.fov * 0.5).tan();
+    let tan_x = camera.aspect_ratio * tan_y;
+    // Each plane: (nx, ny, nz, d) — inside when nx*x + ny*y + nz*z + d >= 0 in camera space.
+    let planes: [(f32, f32, f32, f32); 6] = [
+        (0.0, 0.0, -1.0, -camera.near), // near:   z <= -near
+        (0.0, 0.0, 1.0, camera.far),    // far:    z >= -far
+        (-1.0, 0.0, -tan_x, 0.0),       // right:  x <= tan_x * (-z)
+        (1.0, 0.0, -tan_x, 0.0),        // left:   x >= -tan_x * (-z)
+        (0.0, -1.0, -tan_y, 0.0),       // top:    y <= tan_y * (-z)
+        (0.0, 1.0, -tan_y, 0.0),        // bottom: y >= -tan_y * (-z)
+    ];
+    let mut polygon: Vec<Vert> = triangle.to_vec();
+    for (nx, ny, nz, d) in planes {
+        polygon = clip_polygon_against_plane(&polygon, nx, ny, nz, d);
+        if polygon.is_empty() {
+            return Vec::new();
+        }
+    }
+    if polygon.len() < 3 {
+        return Vec::new();
+    }
+    // Fan-triangulate the clipped polygon from vertex 0.
+    (1..polygon.len() - 1)
+        .map(|i| [polygon[0], polygon[i], polygon[i + 1]])
+        .collect()
 }
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
@@ -180,9 +189,9 @@ pub(super) fn prepare_object(
     object: &Object,
     width: f32,
     height: f32,
+    camera: &Camera,
     camera_view_mat: Mat4,
     camera_projection_mat: Mat4,
-    camera_near: f32,
 ) -> Vec<PreparedTriangle> {
     // Compute the model matrix and its inverse-transpose (for correct normal transformation
     // under non-uniform scaling)
@@ -237,8 +246,8 @@ pub(super) fn prepare_object(
             ..verts[*i2]
         };
 
-        // Clip against the near plane. This may produce 0, 1, or 2 triangles.
-        for [v0, v1, v2] in clip_near([v0, v1, v2], camera_near).into_iter().flatten() {
+        // Clip against all 6 frustum planes. May produce 0 or more triangles.
+        for [v0, v1, v2] in clip_to_frustum([v0, v1, v2], camera) {
             // Project camera-space positions to 2D screen coordinates.
             // z values are NDC depth, kept for depth interpolation during rasterization.
             let ((p0, z0), (p1, z1), (p2, z2)) =

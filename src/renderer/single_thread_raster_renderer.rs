@@ -25,7 +25,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
 
         let triangles: Vec<_> = objects
             .iter()
-            .flat_map(|obj| prepare_object(obj, width, height, view, projection, camera.near))
+            .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
             .collect();
 
         let tiles = make_tiles(framebuffer.width, framebuffer.height, TILE_SIZE);
@@ -47,7 +47,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
 
         let triangles: Vec<_> = objects
             .iter()
-            .flat_map(|obj| prepare_object(obj, width, height, view, projection, camera.near))
+            .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
             .collect();
 
         draw_wireframe(&triangles, framebuffer);
