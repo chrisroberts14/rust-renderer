@@ -37,6 +37,7 @@ enum ObjectSchema {
         transform: Transform,
         #[serde(default = "default_colour")]
         colour: [u8; 4],
+        update: Option<Transform>,
     },
     Plane {
         size: f32,
@@ -55,9 +56,18 @@ impl ObjectSchema {
                 obj_path,
                 transform,
                 colour,
+                update,
             } => {
                 let mesh = ObjLoader::load(obj_path)?;
-                Ok(Object::new(mesh, transform, Material::Color(colour)))
+                let object = Object::new(mesh, transform, Material::Color(colour));
+                let object = if let Some(upd) = update {
+                    object.with_update(move |t| {
+                        *t = *t * upd;
+                    })
+                } else {
+                    object
+                };
+                Ok(object)
             }
             ObjectSchema::Plane {
                 size,
