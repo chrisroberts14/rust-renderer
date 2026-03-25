@@ -2,7 +2,7 @@ use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
 use crate::geometry::update_thread::{UpdateThread, spawn_update_thread_for};
 use crate::maths::vec3::Vec3;
-use crate::renderer::Renderer;
+use crate::renderer::{RenderStats, Renderer};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -55,24 +55,19 @@ impl Scene {
         spawn_update_thread_for(&self.objects, &running)
     }
 
-    fn dispatch_render(&self, objects: &[Object], lights: &[Arc<dyn Light>]) {
-        if self.settings.wire_frame_mode {
-            self.renderer
-                .render_wireframe(objects, &self.camera, &self.framebuffer);
-        } else {
-            self.renderer.render_objects(
+    fn dispatch_render(&self, objects: &[Object], lights: &[Arc<dyn Light>]) -> RenderStats {
+        match self.settings.wire_frame_mode {
+            true => self
+                .renderer
+                .render_wireframe(objects, &self.camera, &self.framebuffer),
+            false => self.renderer.render_objects(
                 objects,
                 &self.camera,
                 lights,
                 &self.framebuffer,
                 self.ambient,
-            );
+            ),
         }
-    }
-
-    pub fn render_objects(&mut self) {
-        let objects = self.objects.read().unwrap();
-        self.dispatch_render(&objects, &self.lights);
     }
 
     /// Renders small box representations of each point light for debugging.
@@ -116,14 +111,14 @@ impl Scene {
     }
 
     /// Helper method to render the whole scene
-    pub fn render_scene(&mut self) {
+    pub fn render_scene(&mut self) -> RenderStats {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
         }
-        self.render_objects();
         if self.settings.render_lights {
             self.render_lights();
         }
+        self.dispatch_render(&self.objects.read().unwrap(), &self.lights)
     }
 }

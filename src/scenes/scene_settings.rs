@@ -3,6 +3,7 @@
 pub(crate) struct SceneSettings {
     pub(crate) render_lights: bool,
     pub(crate) wire_frame_mode: bool,
+    pub(crate) show_overlay: bool,
 }
 
 impl Default for SceneSettings {
@@ -16,6 +17,7 @@ impl SceneSettings {
         Self {
             render_lights: false,
             wire_frame_mode: false,
+            show_overlay: false,
         }
     }
 
@@ -27,5 +29,10 @@ impl SceneSettings {
     /// Toggle showing wireframe models
     pub(crate) fn toggle_wire_frame_mode(&mut self) {
         self.wire_frame_mode = !self.wire_frame_mode;
+    }
+
+    /// Toggle showing the debug overlay
+    pub(crate) fn toggle_overlay(&mut self) {
+        self.show_overlay = !self.show_overlay;
     }
 }

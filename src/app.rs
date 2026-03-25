@@ -137,6 +137,10 @@ impl App {
                     .move_camera(self.scene.camera.up() * -0.05);
                 Ok(())
             }
+            Key::Named(NamedKey::F1) => {
+                self.scene.settings.toggle_overlay();
+                Ok(())
+            }
             Key::Named(NamedKey::Escape) => {
                 if let Some(window) = self.window {
                     window.set_cursor_visible(true);
@@ -212,10 +216,18 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
-                self.scene.render_scene();
+                let stats = self.scene.render_scene();
                 self.fps_counter.tick(&mut self.overlay);
-                self.overlay
-                    .write_to_framebuffer(&mut self.scene.framebuffer);
+
+                if self.scene.settings.show_overlay {
+                    // Write the render stats to the overlay
+                    self.overlay
+                        .add("Triangle Count", &stats.triangle_count.to_string());
+                    self.overlay
+                        .add("Tile Count", &stats.tile_count.to_string());
+                    self.overlay
+                        .write_to_framebuffer(&mut self.scene.framebuffer);
+                }
 
                 // Copy the newly generated frame into the pixel array which is what will be put on the screen
                 let pixels = self.pixels.as_mut().expect("Pixels not initialized");

@@ -1,6 +1,7 @@
 use super::{TILE_SIZE, bin_triangles, draw_wireframe, prepare_object, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
+use crate::renderer::RenderStats;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::tile::make_tiles;
@@ -17,7 +18,7 @@ impl super::Renderer for MultiThreadRasterRenderer {
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
         ambient: f32,
-    ) {
+    ) -> RenderStats {
         let width = framebuffer.width as f32;
         let height = framebuffer.height as f32;
         let view = camera.view_matrix();
@@ -45,9 +46,18 @@ impl super::Renderer for MultiThreadRasterRenderer {
                     ambient,
                 );
             });
+        RenderStats {
+            triangle_count: triangles.len(),
+            tile_count: tiles.len(),
+        }
     }
 
-    fn render_wireframe(&self, objects: &[Object], camera: &Camera, framebuffer: &Framebuffer) {
+    fn render_wireframe(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        framebuffer: &Framebuffer,
+    ) -> RenderStats {
         let width = framebuffer.width as f32;
         let height = framebuffer.height as f32;
         let view = camera.view_matrix();
@@ -59,5 +69,9 @@ impl super::Renderer for MultiThreadRasterRenderer {
             .collect();
 
         draw_wireframe(&triangles, framebuffer);
+        RenderStats {
+            triangle_count: triangles.len(),
+            tile_count: 0,
+        }
     }
 }
