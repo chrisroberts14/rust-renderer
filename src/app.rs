@@ -11,6 +11,7 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
+use crate::overlay::StatsOverlay;
 use crate::renderer::Renderer;
 use crate::scenes::scene::Scene;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub struct App {
     cursor_grabbed: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Arc<dyn Renderer>,
+    overlay: StatsOverlay,
 }
 
 impl App {
@@ -44,6 +46,7 @@ impl App {
                 cursor_grabbed: false,
                 scene_files: None,
                 renderer,
+                overlay: StatsOverlay::new(),
             }),
             _ => {
                 let mut scene_files_iter = get_all_scene_files()?.into_iter().cycle();
@@ -58,6 +61,7 @@ impl App {
                     cursor_grabbed: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
+                    overlay: StatsOverlay::new(),
                 })
             }
         }
@@ -209,7 +213,9 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
                 self.scene.render_scene();
-                self.fps_counter.tick(&mut self.scene.framebuffer);
+                self.fps_counter.tick(&mut self.overlay);
+                self.overlay
+                    .write_to_framebuffer(&mut self.scene.framebuffer);
 
                 // Copy the newly generated frame into the pixel array which is what will be put on the screen
                 let pixels = self.pixels.as_mut().expect("Pixels not initialized");
