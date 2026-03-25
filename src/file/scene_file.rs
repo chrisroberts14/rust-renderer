@@ -62,7 +62,8 @@ impl ObjectSchema {
                 let object = Object::new(mesh, transform, Material::Color(colour));
                 let object = if let Some(upd) = update {
                     object.with_update(move |t| {
-                        *t = *t * upd;
+                        t.rotation = t.rotation + upd.rotation;
+                        t.position = t.position + upd.position;
                     })
                 } else {
                     object
