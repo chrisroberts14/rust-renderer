@@ -17,6 +17,7 @@ use clap::ValueEnum;
 use std::sync::Arc;
 
 pub(super) const TILE_SIZE: usize = 32;
+const TILE_SHIFT: usize = TILE_SIZE.trailing_zeros() as usize;
 
 const SHININESS: i32 = 32;
 
@@ -297,6 +298,10 @@ pub(super) fn bin_triangles(
 
     let mut bins: Vec<Vec<usize>> = vec![Vec::new(); tiles.len()];
 
+    // Clamp to valid tile grid
+    let max_tile_x = tiles_per_row - 1;
+    let max_tile_y = (tiles.len() / tiles_per_row) - 1;
+
     for (tri_idx, tri) in triangles.iter().enumerate() {
         let [p0, p1, p2] = tri.screen;
 
@@ -307,14 +312,10 @@ pub(super) fn bin_triangles(
         let max_y = p0.y.max(p1.y).max(p2.y).ceil().max(0.0) as usize;
 
         // Convert pixel bounds → tile indices
-        let tile_min_x = min_x / TILE_SIZE;
-        let tile_max_x = max_x / TILE_SIZE;
-        let tile_min_y = min_y / TILE_SIZE;
-        let tile_max_y = max_y / TILE_SIZE;
-
-        // Clamp to valid tile grid
-        let max_tile_x = tiles_per_row - 1;
-        let max_tile_y = (tiles.len() / tiles_per_row) - 1;
+        let tile_min_x = min_x >> TILE_SHIFT;
+        let tile_max_x = max_x >> TILE_SHIFT;
+        let tile_min_y = min_y >> TILE_SHIFT;
+        let tile_max_y = max_y >> TILE_SHIFT;
 
         let tile_min_x = tile_min_x.min(max_tile_x);
         let tile_max_x = tile_max_x.min(max_tile_x);
@@ -323,8 +324,9 @@ pub(super) fn bin_triangles(
 
         // Assign triangle to overlapping tiles
         for ty in tile_min_y..=tile_max_y {
+            let row_start = ty * tiles_per_row;
             for tx in tile_min_x..=tile_max_x {
-                let tile_idx = ty * tiles_per_row + tx;
+                let tile_idx = row_start + tx;
                 bins[tile_idx].push(tri_idx);
             }
         }
