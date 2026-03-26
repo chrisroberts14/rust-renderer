@@ -12,7 +12,7 @@ use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
-use crate::tile::Tile;
+use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
 
@@ -69,7 +69,37 @@ pub trait Renderer {
         objects: &[Object],
         camera: &Camera,
         framebuffer: &Framebuffer,
-    ) -> RenderStats;
+    ) -> RenderStats {
+        let (triangles, _, _) = prepare_render(objects, camera, framebuffer);
+        draw_wireframe(&triangles, framebuffer);
+        RenderStats {
+            triangle_count: triangles.len(),
+            tile_count: 0,
+        }
+    }
+}
+
+/// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile
+/// grid, and bins triangles into tiles. Both raster renderers call this, then differ only in
+/// whether they dispatch tile rasterization with `iter` or `par_iter`.
+pub(super) fn prepare_render(
+    objects: &[Object],
+    camera: &Camera,
+    framebuffer: &Framebuffer,
+) -> (Vec<PreparedTriangle>, Vec<Tile>, Vec<Vec<usize>>) {
+    let width = framebuffer.width as f32;
+    let height = framebuffer.height as f32;
+    let view = camera.view_matrix();
+    let projection = camera.projection_matrix();
+
+    let triangles: Vec<_> = objects
+        .iter()
+        .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
+        .collect();
+
+    let tiles = make_tiles(framebuffer.width, framebuffer.height, TILE_SIZE);
+    let bins = bin_triangles(&triangles, &tiles, framebuffer.width);
+    (triangles, tiles, bins)
 }
 
 // Functions and structs used across renderers

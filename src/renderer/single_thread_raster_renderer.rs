@@ -1,12 +1,11 @@
-use super::{TILE_SIZE, bin_triangles, draw_wireframe, prepare_object, rasterize_tile};
 /// Single threaded version of the raster renderer. Used for testing and debugging,
 /// as it is not as performant as the multi-threaded version.
+use super::{prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::RenderStats;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
-use crate::tile::make_tiles;
 use std::sync::Arc;
 
 pub struct SingleThreadRasterRenderer;
@@ -20,19 +19,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> RenderStats {
-        let width = framebuffer.width as f32;
-        let height = framebuffer.height as f32;
-        let view = camera.view_matrix();
-        let projection = camera.projection_matrix();
-
-        let triangles: Vec<_> = objects
-            .iter()
-            .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
-            .collect();
-
-        let tiles = make_tiles(framebuffer.width, framebuffer.height, TILE_SIZE);
-        let bins = bin_triangles(&triangles, &tiles, framebuffer.width);
-
+        let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer);
         tiles
             .iter()
             .zip(bins.iter())
@@ -50,29 +37,6 @@ impl super::Renderer for SingleThreadRasterRenderer {
         RenderStats {
             triangle_count: triangles.len(),
             tile_count: tiles.len(),
-        }
-    }
-
-    fn render_wireframe(
-        &self,
-        objects: &[Object],
-        camera: &Camera,
-        framebuffer: &Framebuffer,
-    ) -> RenderStats {
-        let width = framebuffer.width as f32;
-        let height = framebuffer.height as f32;
-        let view = camera.view_matrix();
-        let projection = camera.projection_matrix();
-
-        let triangles: Vec<_> = objects
-            .iter()
-            .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
-            .collect();
-
-        draw_wireframe(&triangles, framebuffer);
-        RenderStats {
-            triangle_count: triangles.len(),
-            tile_count: 0,
         }
     }
 }
