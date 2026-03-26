@@ -44,7 +44,7 @@ pub fn spawn_update_thread_for(
     let handle = thread::spawn(move || {
         while thread_running.load(Ordering::Relaxed) {
             {
-                let mut objs = objects.write().unwrap();
+                let mut objs = objects.write().unwrap_or_else(|e| e.into_inner());
                 for object in objs.iter_mut() {
                     object.update();
                 }

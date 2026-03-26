@@ -119,6 +119,9 @@ impl Scene {
         if self.settings.render_lights {
             self.render_lights();
         }
-        self.dispatch_render(&self.objects.read().unwrap(), &self.lights)
+        self.dispatch_render(
+            &self.objects.read().unwrap_or_else(|e| e.into_inner()),
+            &self.lights,
+        )
     }
 }

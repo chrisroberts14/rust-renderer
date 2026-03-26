@@ -79,7 +79,7 @@ macro_rules! cached {
             let cache = CACHE.get_or_init(|| Mutex::new($crate::LruCache::new($cap)));
 
             {
-                let mut cache_guard = cache.lock().unwrap();
+                let mut cache_guard = cache.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(v) = cache_guard.get(&$arg) {
                     return Ok(v.clone());
                 }
@@ -88,7 +88,7 @@ macro_rules! cached {
             let result: Result<$ok, $err> = { $body };
 
             if let Ok(ref value) = result {
-                let mut cache_guard = cache.lock().unwrap();
+                let mut cache_guard = cache.lock().unwrap_or_else(|e| e.into_inner());
                 cache_guard.insert($arg.clone(), value.clone());
             }
 
