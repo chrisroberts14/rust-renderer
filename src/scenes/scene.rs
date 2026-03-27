@@ -99,16 +99,6 @@ impl Scene {
         self.dispatch_render(renderer, &light_objects, &[] as &[Arc<dyn Light>]);
     }
 
-    /// Toggle rendering point lights as debug cubes
-    pub fn toggle_render_lights(&mut self) {
-        self.settings.toggle_render_lights();
-    }
-
-    /// Toggle wireframe rendering mode
-    pub fn toggle_wire_frame_mode(&mut self) {
-        self.settings.toggle_wire_frame_mode();
-    }
-
     /// Helper method to render the whole scene
     ///
     /// Clears the framebuffer then does the following:
