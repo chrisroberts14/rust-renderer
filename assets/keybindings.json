@@ -1,0 +1,15 @@
+{
+    "move_forward": "w",
+    "move_backward": "s",
+    "move_right": "d",
+    "move_left": "a",
+    "move_up": "space",
+    "move_down": "shift",
+    "toggle_wireframe": "m",
+    "toggle_lights": "l",
+    "next_scene": "n",
+    "increase_tiles": "t",
+    "decrease_tiles": "y",
+    "toggle_overlay": "f1",
+    "release_mouse": "escape"
+}
