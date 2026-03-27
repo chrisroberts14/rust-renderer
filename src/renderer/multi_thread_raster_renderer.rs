@@ -1,13 +1,21 @@
 use super::{prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
-use crate::renderer::RenderStats;
+use crate::renderer::{RenderStats, draw_wireframe};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-pub struct MultiThreadRasterRenderer;
+pub struct MultiThreadRasterRenderer {
+    tile_size: usize,
+}
+
+impl MultiThreadRasterRenderer {
+    pub fn new(tile_size: usize) -> Self {
+        Self { tile_size }
+    }
+}
 
 impl super::Renderer for MultiThreadRasterRenderer {
     fn render_objects(
@@ -18,7 +26,7 @@ impl super::Renderer for MultiThreadRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> RenderStats {
-        let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer);
+        let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
         tiles
             .par_iter()
             .zip(bins.par_iter())
@@ -37,5 +45,29 @@ impl super::Renderer for MultiThreadRasterRenderer {
             triangle_count: triangles.len(),
             tile_count: tiles.len(),
         }
+    }
+
+    fn render_wireframe(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        framebuffer: &Framebuffer,
+    ) -> RenderStats {
+        let (triangles, _, _) = prepare_render(objects, camera, framebuffer, self.tile_size);
+        draw_wireframe(&triangles, framebuffer);
+        RenderStats {
+            triangle_count: triangles.len(),
+            tile_count: 0,
+        }
+    }
+
+    fn decrease_tile_count(&mut self, delta: usize) {
+        if self.tile_size - delta >= 1 {
+            self.tile_size -= delta;
+        }
+    }
+
+    fn increase_tile_count(&mut self, delta: usize) {
+        self.tile_size += delta;
     }
 }

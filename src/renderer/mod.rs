@@ -16,9 +16,6 @@ use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
 
-pub(super) const TILE_SIZE: usize = 32;
-const TILE_SHIFT: usize = TILE_SIZE.trailing_zeros() as usize;
-
 const SHININESS: i32 = 32;
 
 #[derive(Debug)]
@@ -39,8 +36,8 @@ impl RendererChoice {
     /// Turns the enum into an Arc pointer to the actual struct
     pub fn into_renderer(self) -> Box<dyn Renderer> {
         match self {
-            RendererChoice::SingleThreadRaster => Box::new(SingleThreadRasterRenderer),
-            RendererChoice::MultiThreadRaster => Box::new(MultiThreadRasterRenderer),
+            RendererChoice::SingleThreadRaster => Box::new(SingleThreadRasterRenderer::new(32)),
+            RendererChoice::MultiThreadRaster => Box::new(MultiThreadRasterRenderer::new(32)),
         }
     }
 }
@@ -69,14 +66,15 @@ pub trait Renderer {
         objects: &[Object],
         camera: &Camera,
         framebuffer: &Framebuffer,
-    ) -> RenderStats {
-        let (triangles, _, _) = prepare_render(objects, camera, framebuffer);
-        draw_wireframe(&triangles, framebuffer);
-        RenderStats {
-            triangle_count: triangles.len(),
-            tile_count: 0,
-        }
-    }
+    ) -> RenderStats;
+
+    /// Increase the number of tiles
+    /// Is a no-op if the renderer is not tile based
+    fn increase_tile_count(&mut self, delta: usize);
+
+    /// Decrease the number of tiles
+    /// Is a no-op if the renderer is not tile based
+    fn decrease_tile_count(&mut self, delta: usize);
 }
 
 /// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile
@@ -86,6 +84,7 @@ pub(super) fn prepare_render(
     objects: &[Object],
     camera: &Camera,
     framebuffer: &Framebuffer,
+    tile_size: usize,
 ) -> (Vec<PreparedTriangle>, Vec<Tile>, Vec<Vec<usize>>) {
     let width = framebuffer.width as f32;
     let height = framebuffer.height as f32;
@@ -97,8 +96,8 @@ pub(super) fn prepare_render(
         .flat_map(|obj| prepare_object(obj, width, height, camera, view, projection))
         .collect();
 
-    let tiles = make_tiles(framebuffer.width, framebuffer.height, TILE_SIZE);
-    let bins = bin_triangles(&triangles, &tiles, framebuffer.width);
+    let tiles = make_tiles(framebuffer.width, framebuffer.height, tile_size);
+    let bins = bin_triangles(&triangles, &tiles, framebuffer.width, tile_size);
     (triangles, tiles, bins)
 }
 
@@ -323,8 +322,9 @@ pub(super) fn bin_triangles(
     triangles: &[PreparedTriangle],
     tiles: &[Tile],
     screen_width: usize,
+    tile_size: usize,
 ) -> Vec<Vec<usize>> {
-    let tiles_per_row = screen_width.div_ceil(TILE_SIZE);
+    let tiles_per_row = screen_width.div_ceil(tile_size);
 
     let mut bins: Vec<Vec<usize>> = vec![Vec::new(); tiles.len()];
 
@@ -342,10 +342,10 @@ pub(super) fn bin_triangles(
         let max_y = p0.y.max(p1.y).max(p2.y).ceil().max(0.0) as usize;
 
         // Convert pixel bounds → tile indices
-        let tile_min_x = min_x >> TILE_SHIFT;
-        let tile_max_x = max_x >> TILE_SHIFT;
-        let tile_min_y = min_y >> TILE_SHIFT;
-        let tile_max_y = max_y >> TILE_SHIFT;
+        let tile_min_x = min_x / tile_size;
+        let tile_max_x = max_x / tile_size;
+        let tile_min_y = min_y / tile_size;
+        let tile_max_y = max_y / tile_size;
 
         let tile_min_x = tile_min_x.min(max_tile_x);
         let tile_max_x = tile_max_x.min(max_tile_x);

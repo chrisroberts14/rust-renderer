@@ -116,6 +116,14 @@ impl App {
                 }
                 Ok(())
             }
+            "t" => {
+                self.renderer.increase_tile_count(1);
+                Ok(())
+            }
+            "y" => {
+                self.renderer.decrease_tile_count(1);
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
