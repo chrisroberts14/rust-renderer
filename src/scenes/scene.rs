@@ -21,7 +21,6 @@ pub struct Scene {
     skybox: Option<Texture>,
     _update_thread: Option<UpdateThread>, // Exists solely so when it is dropped the thread is stopped cleanly
     pub(crate) settings: SceneSettings,
-    renderer: Arc<dyn Renderer>,
     ambient: f32,
 }
 
@@ -31,7 +30,6 @@ impl Scene {
         height: f32,
         objects: Vec<Object>,
         lights: Vec<Arc<dyn Light>>,
-        renderer: Arc<dyn Renderer>,
         ambient: f32,
     ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
@@ -45,7 +43,6 @@ impl Scene {
             lights,
             settings: SceneSettings::new(),
             skybox: None,
-            renderer,
             ambient,
         }
     }
@@ -55,12 +52,15 @@ impl Scene {
         spawn_update_thread_for(&self.objects, &running)
     }
 
-    fn dispatch_render(&self, objects: &[Object], lights: &[Arc<dyn Light>]) -> RenderStats {
+    fn dispatch_render(
+        &self,
+        renderer: Arc<dyn Renderer>,
+        objects: &[Object],
+        lights: &[Arc<dyn Light>],
+    ) -> RenderStats {
         match self.settings.wire_frame_mode {
-            true => self
-                .renderer
-                .render_wireframe(objects, &self.camera, &self.framebuffer),
-            false => self.renderer.render_objects(
+            true => renderer.render_wireframe(objects, &self.camera, &self.framebuffer),
+            false => renderer.render_objects(
                 objects,
                 &self.camera,
                 lights,
@@ -72,7 +72,7 @@ impl Scene {
 
     /// Renders small box representations of each point light for debugging.
     /// Light boxes are rendered unlit so their colour always matches the light colour.
-    pub fn render_lights(&mut self) {
+    pub fn render_lights(&mut self, renderer: Arc<dyn Renderer>) {
         let light_objects: Vec<Object> = self
             .lights
             .iter()
@@ -97,7 +97,7 @@ impl Scene {
             .collect();
 
         // Pass empty lights — light boxes should appear unlit.
-        self.dispatch_render(&light_objects, &[] as &[Arc<dyn Light>]);
+        self.dispatch_render(renderer, &light_objects, &[] as &[Arc<dyn Light>]);
     }
 
     /// Toggle rendering point lights as debug cubes
@@ -111,15 +111,16 @@ impl Scene {
     }
 
     /// Helper method to render the whole scene
-    pub fn render_scene(&mut self) -> RenderStats {
+    pub fn render_scene(&mut self, renderer: Arc<dyn Renderer>) -> RenderStats {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
         }
         if self.settings.render_lights {
-            self.render_lights();
+            self.render_lights(renderer.clone());
         }
         self.dispatch_render(
+            renderer.clone(),
             &self.objects.read().unwrap_or_else(|e| e.into_inner()),
             &self.lights,
         )

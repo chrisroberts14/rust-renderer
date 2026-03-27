@@ -51,7 +51,7 @@ impl App {
             _ => {
                 let mut scene_files_iter = get_all_scene_files()?.into_iter().cycle();
                 let next_scene = scene_files_iter.next().ok_or("No scene files found")?;
-                let scene = SceneFile::from_file(next_scene, width, height, Arc::clone(&renderer))?;
+                let scene = SceneFile::from_file(next_scene, width, height)?;
 
                 Ok(Self {
                     window: None,
@@ -110,7 +110,6 @@ impl App {
                         next_scene,
                         self.scene.framebuffer.width as f32,
                         self.scene.framebuffer.height as f32,
-                        Arc::clone(&self.renderer),
                     )?;
                     self.scene = scene;
                     self.scene.settings = old_settings;
@@ -216,7 +215,7 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
-                let stats = self.scene.render_scene();
+                let stats = self.scene.render_scene(self.renderer.clone());
                 self.fps_counter.tick(&mut self.overlay);
 
                 if self.scene.settings.show_overlay {

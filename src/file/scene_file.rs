@@ -1,7 +1,6 @@
 use crate::scenes::lights::spot_light::SpotLight;
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
-    renderer::Renderer,
     scenes::{
         lights::{Light, pointlight::PointLight},
         material::Material,
@@ -132,7 +131,6 @@ impl SceneFile {
         path: P,
         window_width: f32,
         window_height: f32,
-        renderer: Arc<dyn Renderer>,
     ) -> Result<Scene, Box<dyn Error>> {
         let data = fs::read_to_string(path)?;
         let scene: SceneFile = serde_json::from_str(&data)?;
@@ -154,7 +152,6 @@ impl SceneFile {
             window_height,
             objs,
             lights,
-            renderer,
             scene.ambient,
         ))
     }

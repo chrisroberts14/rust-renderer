@@ -1,28 +1,20 @@
 use criterion::{
     BenchmarkGroup, Criterion, criterion_group, criterion_main, measurement::WallTime,
 };
+use rust_renderer::file::scene_file::SceneFile;
 use rust_renderer::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
-use rust_renderer::{create_from_file, scenes::scene::Scene};
-use std::path::PathBuf;
+use rust_renderer::scenes::scene::Scene;
 use std::sync::Arc;
 
 const SIMPLE_SCENE_PATH: &str = "assets/scene_defs/simple.json";
 const COMPLEX_SCENE_PATH: &str = "assets/scene_defs/complex.json";
 
 fn simple_scene() -> Scene {
-    create_from_file(
-        PathBuf::from(SIMPLE_SCENE_PATH),
-        Some(Arc::new(SingleThreadRasterRenderer)),
-    )
-    .expect("Failed to load simple scene")
+    SceneFile::from_file(SIMPLE_SCENE_PATH, 800.0, 600.0).unwrap()
 }
 
 fn complex_scene() -> Scene {
-    create_from_file(
-        PathBuf::from(COMPLEX_SCENE_PATH),
-        Some(Arc::new(SingleThreadRasterRenderer)),
-    )
-    .expect("Failed to load complex scene")
+    SceneFile::from_file(COMPLEX_SCENE_PATH, 800.0, 600.0).unwrap()
 }
 
 fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: Scene) {
@@ -31,18 +23,18 @@ fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: Sc
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            || scene.clone(),
-            |mut s| s.render_scene(),
+            || (wireframe.clone(), Arc::new(SingleThreadRasterRenderer)),
+            |(mut s, r)| s.render_scene(r),
             criterion::BatchSize::SmallInput,
-        )
+        );
     });
 
     group.bench_function(format!("{name}/wireframe"), |b| {
         b.iter_batched(
-            || wireframe.clone(),
-            |mut s| s.render_scene(),
+            || (wireframe.clone(), Arc::new(SingleThreadRasterRenderer)),
+            |(mut s, r)| s.render_scene(r),
             criterion::BatchSize::SmallInput,
-        )
+        );
     });
 }
 
