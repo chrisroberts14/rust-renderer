@@ -4,11 +4,7 @@ use std::ops::Mul;
 
 use crate::maths::{mat4::Mat4, vec3::Vec3};
 
-fn default_position() -> Vec3 {
-    Vec3::ZERO
-}
-
-fn default_rotation() -> Vec3 {
+fn default_zero() -> Vec3 {
     Vec3::ZERO
 }
 
@@ -18,9 +14,9 @@ fn default_scale() -> Vec3 {
 
 #[derive(JsonSchema, Deserialize, Clone, Copy)]
 pub struct Transform {
-    #[serde(default = "default_position")]
+    #[serde(default = "default_zero")]
     pub position: Vec3,
-    #[serde(default = "default_rotation")]
+    #[serde(default = "default_zero")]
     pub rotation: Vec3,
     #[serde(default = "default_scale")]
     pub scale: Vec3,
@@ -40,8 +36,7 @@ impl Transform {
     pub fn in_position(position: Vec3) -> Self {
         Self {
             position,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
+            ..Default::default()
         }
     }
 
