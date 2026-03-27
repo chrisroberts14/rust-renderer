@@ -6,7 +6,7 @@ use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey, SmolStr};
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
 use crate::file::key_bindings_file::{Action, KeyBindings};
@@ -152,14 +152,6 @@ impl App {
         }
     }
 
-    fn handle_character(&mut self, ch: &SmolStr) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(action) = self.key_bindings.char_bindings.get(ch.as_str()).cloned() {
-            self.perform_action(&action)
-        } else {
-            Ok(())
-        }
-    }
-
     /// Handle keyboard entries
     /// This mainly exists as a helper to prevent the window_event function
     /// from becoming too large
@@ -167,20 +159,18 @@ impl App {
         if key_event.state != ElementState::Pressed {
             return Ok(());
         }
-        match &key_event.logical_key {
-            Key::Character(ch) => self.handle_character(ch),
-            Key::Named(named_key) => {
-                let key_str = named_key_to_str(named_key);
-                if let Some(action) = key_str
-                    .and_then(|s| self.key_bindings.named_bindings.get(s))
-                    .cloned()
-                {
-                    self.perform_action(&action)
-                } else {
-                    Ok(())
-                }
-            }
-            _ => Ok(()),
+        let key_str = match &key_event.logical_key {
+            Key::Character(ch) => ch.to_string(),
+            Key::Named(named_key) => match named_key_to_str(named_key) {
+                Some(s) => s.to_string(),
+                None => return Ok(()),
+            },
+            _ => return Ok(()),
+        };
+        if let Some(action) = self.key_bindings.bindings.get(&key_str).cloned() {
+            self.perform_action(&action)
+        } else {
+            Ok(())
         }
     }
 
