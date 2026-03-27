@@ -40,7 +40,7 @@ impl Scene {
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
             lights,
-            settings: SceneSettings::new(),
+            settings: SceneSettings::default(),
             skybox: None,
             ambient,
         }

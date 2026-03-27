@@ -7,14 +7,6 @@ pub struct SceneSettings {
 }
 
 impl SceneSettings {
-    pub(crate) fn new() -> Self {
-        Self {
-            render_lights: false,
-            wire_frame_mode: false,
-            show_overlay: false,
-        }
-    }
-
     /// Toggle of we show the lights as cubes in the scene useful for debugging
     pub fn toggle_render_lights(&mut self) {
         self.render_lights = !self.render_lights;

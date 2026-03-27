@@ -50,7 +50,7 @@ impl App {
                 cursor_grabbed: false,
                 scene_files: None,
                 renderer,
-                overlay: StatsOverlay::new(),
+                overlay: StatsOverlay::default(),
                 key_bindings,
             }),
             _ => {
@@ -66,7 +66,7 @@ impl App {
                     cursor_grabbed: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
-                    overlay: StatsOverlay::new(),
+                    overlay: StatsOverlay::default(),
                     key_bindings,
                 })
             }
