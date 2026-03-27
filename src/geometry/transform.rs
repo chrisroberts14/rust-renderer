@@ -26,15 +26,17 @@ pub struct Transform {
     pub scale: Vec3,
 }
 
-impl Transform {
-    pub fn new() -> Self {
+impl Default for Transform {
+    fn default() -> Self {
         Self {
             position: Vec3::ZERO,
             rotation: Vec3::ZERO,
             scale: Vec3::ONE,
         }
     }
+}
 
+impl Transform {
     pub fn in_position(position: Vec3) -> Self {
         Self {
             position,
@@ -94,11 +96,5 @@ impl Mul for Transform {
             rotation: Vec3::new(rx, ry, rz),
             scale: Vec3::new(sx, sy, sz),
         }
-    }
-}
-
-impl Default for Transform {
-    fn default() -> Self {
-        Self::new()
     }
 }
