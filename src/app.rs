@@ -9,11 +9,14 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey, SmolStr};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
+use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
 use crate::overlay::StatsOverlay;
 use crate::renderer::Renderer;
 use crate::scenes::scene::Scene;
+
+const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
 
 pub struct App {
     window: Option<&'static dyn Window>,
@@ -24,6 +27,7 @@ pub struct App {
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
     overlay: StatsOverlay,
+    key_bindings: KeyBindings,
 }
 
 impl App {
@@ -36,6 +40,7 @@ impl App {
         width: f32,
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
         match scene_option {
             Some(scene) => Ok(Self {
                 window: None,
@@ -46,6 +51,7 @@ impl App {
                 scene_files: None,
                 renderer,
                 overlay: StatsOverlay::new(),
+                key_bindings,
             }),
             _ => {
                 let mut scene_files_iter = get_all_scene_files()?.into_iter().cycle();
@@ -61,48 +67,53 @@ impl App {
                     scene_files: Some(scene_files_iter),
                     renderer,
                     overlay: StatsOverlay::new(),
+                    key_bindings,
                 })
             }
         }
     }
 
-    fn handle_character(&mut self, ch: &SmolStr) -> Result<(), Box<dyn std::error::Error>> {
-        let ch = ch.as_str();
-        match ch {
-            "w" => {
+    fn perform_action(&mut self, action: &Action) -> Result<(), Box<dyn std::error::Error>> {
+        match action {
+            Action::MoveForward => {
                 let dir = self.scene.camera.forward();
                 self.scene.camera.move_camera(dir * 0.05);
                 Ok(())
             }
-            "s" => {
+            Action::MoveBackward => {
                 let dir = self.scene.camera.forward();
                 self.scene.camera.move_camera(dir * -0.05);
                 Ok(())
             }
-            "d" => {
+            Action::MoveRight => {
                 let dir = self.scene.camera.right();
                 self.scene.camera.move_camera(dir * 0.05);
                 Ok(())
             }
-            "a" => {
+            Action::MoveLeft => {
                 let dir = self.scene.camera.right();
                 self.scene.camera.move_camera(dir * -0.05);
                 Ok(())
             }
-            " " => {
+            Action::MoveUp => {
                 self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
                 Ok(())
             }
-            "m" => {
+            Action::MoveDown => {
+                self.scene
+                    .camera
+                    .move_camera(self.scene.camera.up() * -0.05);
+                Ok(())
+            }
+            Action::ToggleWireframe => {
                 self.scene.settings.toggle_wire_frame_mode();
                 Ok(())
             }
-            "l" => {
+            Action::ToggleLights => {
                 self.scene.settings.toggle_render_lights();
                 Ok(())
             }
-            "n" => {
-                // Load the next scene in the files iterator
+            Action::NextScene => {
                 if let Some(next_scene) = self.scene_files.as_mut().and_then(|sf| sf.next()) {
                     let old_settings = self.scene.settings.clone();
                     let scene = SceneFile::from_file(
@@ -116,15 +127,36 @@ impl App {
                 }
                 Ok(())
             }
-            "t" => {
+            Action::IncreaseTiles => {
                 self.renderer.increase_tile_count(1);
                 Ok(())
             }
-            "y" => {
+            Action::DecreaseTiles => {
                 self.renderer.decrease_tile_count(1);
                 Ok(())
             }
-            _ => Ok(()),
+            Action::ToggleOverlay => {
+                self.scene.settings.toggle_overlay();
+                Ok(())
+            }
+            Action::ReleaseMouse => {
+                if let Some(window) = self.window {
+                    window.set_cursor_visible(true);
+                    window.set_cursor_grab(CursorGrabMode::None)?;
+                    self.cursor_grabbed = false;
+                    Ok(())
+                } else {
+                    Err("Window not initialized".into())
+                }
+            }
+        }
+    }
+
+    fn handle_character(&mut self, ch: &SmolStr) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(action) = self.key_bindings.char_bindings.get(ch.as_str()).cloned() {
+            self.perform_action(&action)
+        } else {
+            Ok(())
         }
     }
 
@@ -137,24 +169,15 @@ impl App {
         }
         match &key_event.logical_key {
             Key::Character(ch) => self.handle_character(ch),
-            Key::Named(NamedKey::Shift) => {
-                self.scene
-                    .camera
-                    .move_camera(self.scene.camera.up() * -0.05);
-                Ok(())
-            }
-            Key::Named(NamedKey::F1) => {
-                self.scene.settings.toggle_overlay();
-                Ok(())
-            }
-            Key::Named(NamedKey::Escape) => {
-                if let Some(window) = self.window {
-                    window.set_cursor_visible(true);
-                    window.set_cursor_grab(CursorGrabMode::None)?;
-                    self.cursor_grabbed = false;
-                    Ok(())
+            Key::Named(named_key) => {
+                let key_str = named_key_to_str(named_key);
+                if let Some(action) = key_str
+                    .and_then(|s| self.key_bindings.named_bindings.get(s))
+                    .cloned()
+                {
+                    self.perform_action(&action)
                 } else {
-                    Err("Window not initialized".into())
+                    Ok(())
                 }
             }
             _ => Ok(()),
@@ -173,6 +196,16 @@ impl App {
             self.cursor_grabbed = true;
         }
         Ok(())
+    }
+}
+
+/// Map a winit `NamedKey` to the lowercase string used in the keybindings file
+fn named_key_to_str(key: &NamedKey) -> Option<&'static str> {
+    match key {
+        NamedKey::Shift => Some("shift"),
+        NamedKey::F1 => Some("f1"),
+        NamedKey::Escape => Some("escape"),
+        _ => None,
     }
 }
 
