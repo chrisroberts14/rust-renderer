@@ -1,15 +1,9 @@
 /// Struct to contain settings about the scene
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct SceneSettings {
     pub(crate) render_lights: bool,
     pub(crate) wire_frame_mode: bool,
     pub(crate) show_overlay: bool,
-}
-
-impl Default for SceneSettings {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl SceneSettings {
