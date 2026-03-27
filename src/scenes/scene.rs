@@ -12,7 +12,6 @@ use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
-#[derive(Clone)]
 pub struct Scene {
     objects: Arc<RwLock<Vec<Object>>>,
     pub(crate) framebuffer: Framebuffer,
@@ -111,6 +110,11 @@ impl Scene {
     }
 
     /// Helper method to render the whole scene
+    ///
+    /// Clears the framebuffer then does the following:
+    /// 1. Draw the skybox
+    /// 2. Render any lights if enabled
+    /// 3. Render the rest of the objects in the scene
     pub fn render_scene(&mut self, renderer: Arc<dyn Renderer>) -> RenderStats {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {

@@ -18,22 +18,21 @@ fn complex_scene() -> Scene {
     SceneFile::from_file(COMPLEX_SCENE_PATH, 800.0, 600.0).unwrap()
 }
 
-fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: Scene) {
-    let mut wireframe = scene.clone();
-    wireframe.toggle_wire_frame_mode();
+fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: &mut Scene) {
+    scene.toggle_wire_frame_mode();
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            || (wireframe.clone(), Arc::new(MultiThreadRasterRenderer)),
-            |(mut s, r)| s.render_scene(r),
+            || Arc::new(MultiThreadRasterRenderer),
+            |r| scene.render_scene(r),
             criterion::BatchSize::SmallInput,
         );
     });
 
     group.bench_function(format!("{name}/wireframe"), |b| {
         b.iter_batched(
-            || (wireframe.clone(), Arc::new(MultiThreadRasterRenderer)),
-            |(mut s, r)| s.render_scene(r),
+            || Arc::new(MultiThreadRasterRenderer),
+            |r| scene.render_scene(r),
             criterion::BatchSize::SmallInput,
         );
     });
@@ -41,8 +40,8 @@ fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: Sc
 
 fn bench_multi_thread(c: &mut Criterion) {
     let mut group = c.benchmark_group("multi_thread");
-    add_scene_benches(&mut group, "simple", simple_scene());
-    add_scene_benches(&mut group, "complex", complex_scene());
+    add_scene_benches(&mut group, "simple", &mut simple_scene());
+    add_scene_benches(&mut group, "complex", &mut complex_scene());
     group.finish();
 }
 
