@@ -19,7 +19,7 @@ pub struct Scene {
     lights: Vec<Arc<dyn Light>>,
     skybox: Option<Texture>,
     _update_thread: Option<UpdateThread>, // Exists solely so when it is dropped the thread is stopped cleanly
-    pub(crate) settings: SceneSettings,
+    pub settings: SceneSettings,
     ambient: f32,
 }
 

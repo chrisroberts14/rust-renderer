@@ -18,7 +18,7 @@ fn complex_scene() -> Scene {
 }
 
 fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: &mut Scene) {
-    scene.toggle_wire_frame_mode();
+    scene.settings.toggle_wire_frame_mode();
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
