@@ -22,7 +22,7 @@ fn add_scene_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: &m
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            || (Arc::new(SingleThreadRasterRenderer)),
+            || Arc::new(SingleThreadRasterRenderer),
             |r| scene.render_scene(r),
             criterion::BatchSize::SmallInput,
         );
