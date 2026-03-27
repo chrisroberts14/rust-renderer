@@ -53,7 +53,7 @@ impl Scene {
 
     fn dispatch_render(
         &self,
-        renderer: Arc<dyn Renderer>,
+        renderer: &dyn Renderer,
         objects: &[Object],
         lights: &[Arc<dyn Light>],
     ) -> RenderStats {
@@ -71,7 +71,7 @@ impl Scene {
 
     /// Renders small box representations of each point light for debugging.
     /// Light boxes are rendered unlit so their colour always matches the light colour.
-    pub fn render_lights(&mut self, renderer: Arc<dyn Renderer>) {
+    pub fn render_lights(&mut self, renderer: &dyn Renderer) {
         let light_objects: Vec<Object> = self
             .lights
             .iter()
@@ -115,16 +115,16 @@ impl Scene {
     /// 1. Draw the skybox
     /// 2. Render any lights if enabled
     /// 3. Render the rest of the objects in the scene
-    pub fn render_scene(&mut self, renderer: Arc<dyn Renderer>) -> RenderStats {
+    pub fn render_scene(&mut self, renderer: &dyn Renderer) -> RenderStats {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
         }
         if self.settings.render_lights {
-            self.render_lights(renderer.clone());
+            self.render_lights(renderer);
         }
         self.dispatch_render(
-            renderer.clone(),
+            renderer,
             &self.objects.read().unwrap_or_else(|e| e.into_inner()),
             &self.lights,
         )

@@ -14,7 +14,6 @@ use crate::fps::FpsCounter;
 use crate::overlay::StatsOverlay;
 use crate::renderer::Renderer;
 use crate::scenes::scene::Scene;
-use std::sync::Arc;
 
 pub struct App {
     window: Option<&'static dyn Window>,
@@ -23,7 +22,7 @@ pub struct App {
     fps_counter: FpsCounter,
     cursor_grabbed: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
-    renderer: Arc<dyn Renderer>,
+    renderer: Box<dyn Renderer>,
     overlay: StatsOverlay,
 }
 
@@ -33,7 +32,7 @@ impl App {
     /// If this is left empty the first in the scene defs file will be loaded instead
     pub fn new(
         scene_option: Option<Scene>,
-        renderer: Arc<dyn Renderer>,
+        renderer: Box<dyn Renderer>,
         width: f32,
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -215,7 +214,7 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
-                let stats = self.scene.render_scene(self.renderer.clone());
+                let stats = self.scene.render_scene(&*self.renderer);
                 self.fps_counter.tick(&mut self.overlay);
 
                 if self.scene.settings.show_overlay {

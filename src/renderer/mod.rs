@@ -37,10 +37,10 @@ pub enum RendererChoice {
 
 impl RendererChoice {
     /// Turns the enum into an Arc pointer to the actual struct
-    pub fn into_renderer(self) -> Arc<dyn Renderer> {
+    pub fn into_renderer(self) -> Box<dyn Renderer> {
         match self {
-            RendererChoice::SingleThreadRaster => Arc::new(SingleThreadRasterRenderer),
-            RendererChoice::MultiThreadRaster => Arc::new(MultiThreadRasterRenderer),
+            RendererChoice::SingleThreadRaster => Box::new(SingleThreadRasterRenderer),
+            RendererChoice::MultiThreadRaster => Box::new(MultiThreadRasterRenderer),
         }
     }
 }
