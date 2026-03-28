@@ -17,6 +17,8 @@ use crate::renderer::Renderer;
 use crate::scenes::scene::Scene;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
+const NORMAL_SPEED: f32 = 0.05;
+const FAST_SPEED: f32 = 0.25;
 
 pub struct App {
     window: Option<&'static dyn Window>,
@@ -24,6 +26,7 @@ pub struct App {
     scene: Scene,
     fps_counter: FpsCounter,
     cursor_grabbed: bool,
+    fast_move: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
     overlay: StatsOverlay,
@@ -48,6 +51,7 @@ impl App {
                 scene,
                 fps_counter: FpsCounter::new(),
                 cursor_grabbed: false,
+                fast_move: false,
                 scene_files: None,
                 renderer,
                 overlay: StatsOverlay::default(),
@@ -64,6 +68,7 @@ impl App {
                     scene,
                     fps_counter: FpsCounter::new(),
                     cursor_grabbed: false,
+                    fast_move: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
                     overlay: StatsOverlay::default(),
@@ -73,38 +78,49 @@ impl App {
         }
     }
 
+    fn move_speed(&self) -> f32 {
+        if self.fast_move {
+            FAST_SPEED
+        } else {
+            NORMAL_SPEED
+        }
+    }
+
     fn perform_action(&mut self, action: &Action) -> Result<(), Box<dyn std::error::Error>> {
         match action {
             Action::MoveForward => {
                 let dir = self.scene.camera.forward();
-                self.scene.camera.move_camera(dir * 0.05);
+                self.scene.camera.move_camera(dir * self.move_speed());
                 Ok(())
             }
             Action::MoveBackward => {
                 let dir = self.scene.camera.forward();
-                self.scene.camera.move_camera(dir * -0.05);
+                self.scene.camera.move_camera(dir * -self.move_speed());
                 Ok(())
             }
             Action::MoveRight => {
                 let dir = self.scene.camera.right();
-                self.scene.camera.move_camera(dir * 0.05);
+                self.scene.camera.move_camera(dir * self.move_speed());
                 Ok(())
             }
             Action::MoveLeft => {
                 let dir = self.scene.camera.right();
-                self.scene.camera.move_camera(dir * -0.05);
+                self.scene.camera.move_camera(dir * -self.move_speed());
                 Ok(())
             }
             Action::MoveUp => {
-                self.scene.camera.move_camera(self.scene.camera.up() * 0.05);
+                self.scene
+                    .camera
+                    .move_camera(self.scene.camera.up() * self.move_speed());
                 Ok(())
             }
             Action::MoveDown => {
                 self.scene
                     .camera
-                    .move_camera(self.scene.camera.up() * -0.05);
+                    .move_camera(self.scene.camera.up() * -self.move_speed());
                 Ok(())
             }
+            Action::SpeedModifier => Ok(()),
             Action::ToggleWireframe => {
                 self.scene.settings.toggle_wire_frame_mode();
                 Ok(())
@@ -156,9 +172,6 @@ impl App {
     /// This mainly exists as a helper to prevent the window_event function
     /// from becoming too large
     fn handle_keyboard(&mut self, key_event: &KeyEvent) -> Result<(), Box<dyn std::error::Error>> {
-        if key_event.state != ElementState::Pressed {
-            return Ok(());
-        }
         let key_str = match &key_event.logical_key {
             Key::Character(ch) => ch.to_string(),
             Key::Named(named_key) => match named_key_to_str(named_key) {
@@ -167,10 +180,16 @@ impl App {
             },
             _ => return Ok(()),
         };
-        if let Some(action) = self.key_bindings.bindings.get(&key_str).cloned() {
-            self.perform_action(&action)
-        } else {
-            Ok(())
+        let Some(action) = self.key_bindings.bindings.get(&key_str).cloned() else {
+            return Ok(());
+        };
+        match action {
+            Action::SpeedModifier => {
+                self.fast_move = key_event.state == ElementState::Pressed;
+                Ok(())
+            }
+            _ if key_event.state == ElementState::Pressed => self.perform_action(&action),
+            _ => Ok(()),
         }
     }
 
@@ -193,6 +212,7 @@ impl App {
 fn named_key_to_str(key: &NamedKey) -> Option<&'static str> {
     match key {
         NamedKey::Shift => Some("shift"),
+        NamedKey::Control => Some("ctrl"),
         NamedKey::F1 => Some("f1"),
         NamedKey::Escape => Some("escape"),
         _ => None,

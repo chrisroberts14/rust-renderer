@@ -5,6 +5,7 @@
     "move_left": "a",
     "move_up": "space",
     "move_down": "shift",
+    "speed_modifier": "ctrl",
     "toggle_wireframe": "m",
     "toggle_lights": "l",
     "next_scene": "n",
