@@ -84,6 +84,10 @@ impl KeyBindings {
             })
             .unwrap_or_default();
 
+        Self::from_map(file_map)
+    }
+
+    fn from_map(file_map: HashMap<String, String>) -> Self {
         let bindings = DEFAULTS
             .iter()
             .filter_map(|(action_name, default_key)| {
@@ -102,5 +106,59 @@ impl KeyBindings {
             .collect();
 
         KeyBindings { bindings }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn defaults() -> KeyBindings {
+        KeyBindings::from_map(HashMap::new())
+    }
+
+    #[test]
+    fn all_actions_are_bound_by_default() {
+        assert_eq!(defaults().bindings.len(), DEFAULTS.len());
+    }
+
+    #[test]
+    fn file_overrides_default_key() {
+        let kb = KeyBindings::from_map(HashMap::from([(
+            "move_forward".to_string(),
+            "i".to_string(),
+        )]));
+        assert_eq!(kb.bindings.get("i"), Some(&Action::MoveForward));
+        assert_eq!(kb.bindings.get("w"), None);
+    }
+
+    #[test]
+    fn aliases_are_converted() {
+        let kb = KeyBindings::from_map(HashMap::from([(
+            "move_up".to_string(),
+            "space".to_string(),
+        )]));
+        assert_eq!(kb.bindings.get(" "), Some(&Action::MoveUp));
+        assert_eq!(kb.bindings.get("space"), None);
+    }
+
+    #[test]
+    fn keys_are_normalised_to_lowercase() {
+        let kb = KeyBindings::from_map(HashMap::from([(
+            "move_forward".to_string(),
+            "W".to_string(),
+        )]));
+        assert_eq!(kb.bindings.get("w"), Some(&Action::MoveForward));
+        assert_eq!(kb.bindings.get("W"), None);
+    }
+
+    #[test]
+    fn unknown_action_in_file_is_ignored() {
+        let kb = KeyBindings::from_map(HashMap::from([(
+            "nonexistent_action".to_string(),
+            "z".to_string(),
+        )]));
+        assert_eq!(kb.bindings.get("z"), None);
+        assert_eq!(kb.bindings.len(), DEFAULTS.len());
     }
 }
