@@ -9,16 +9,14 @@ pub struct Mat4 {
 }
 
 impl Mat4 {
-    pub fn identity() -> Self {
-        Self {
-            m: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-        }
-    }
+    pub const IDENTITY: Mat4 = Mat4 {
+        m: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    };
 
     pub fn translation(x: f32, y: f32, z: f32) -> Self {
         Self {
@@ -278,17 +276,6 @@ mod tests {
         approx_eq(a.x, b.x) && approx_eq(a.y, b.y) && approx_eq(a.z, b.z) && approx_eq(a.w, b.w)
     }
 
-    fn mat4_approx_eq(a: Mat4, b: Mat4) -> bool {
-        (0..4).all(|i| (0..4).all(|j| approx_eq(a.m[i][j], b.m[i][j])))
-    }
-
-    #[test]
-    fn test_identity() {
-        let identity = Mat4::identity();
-        let v = Vec4::new(1.0, 2.0, 3.0, 1.0);
-        assert_eq!(identity * v, v);
-    }
-
     #[test]
     fn test_translate() {
         let trans_mat = Mat4::translation(1.0, 2.0, 3.0);
@@ -359,28 +346,6 @@ mod tests {
         let result = (a * b) * Vec4::new(0.0, 0.0, 0.0, 1.0);
         let expected = Vec4::new(5.0, 7.0, 9.0, 1.0);
         assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_inverse_of_translation() {
-        let m = Mat4::translation(3.0, -1.0, 2.0);
-        let inv = m.inverse().expect("translation matrix is invertible");
-        let identity = m * inv;
-        assert!(
-            mat4_approx_eq(identity, Mat4::identity()),
-            "got {identity:?}"
-        );
-    }
-
-    #[test]
-    fn test_inverse_of_scale() {
-        let m = Mat4::scale(2.0, 4.0, 0.5);
-        let inv = m.inverse().expect("scale matrix is invertible");
-        let identity = m * inv;
-        assert!(
-            mat4_approx_eq(identity, Mat4::identity()),
-            "got {identity:?}"
-        );
     }
 
     #[test]

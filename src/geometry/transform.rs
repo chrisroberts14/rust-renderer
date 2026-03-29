@@ -61,7 +61,7 @@ impl Transform {
             let normal = normal.transpose();
             return (model, normal);
         }
-        (model, Mat4::identity())
+        (model, Mat4::IDENTITY)
     }
 }
 
