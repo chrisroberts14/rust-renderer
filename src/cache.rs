@@ -5,38 +5,47 @@
 /// This implementation is not inherently thread safe so if you desire to use it across multiple threads mutexes/locks will be required
 ///
 /// The initial implementation also used retain which is an O(n) operation which isn't ideal for large caches
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
 /// LRU Cache of a given size
-pub struct LruCache<K, V> {
+pub struct LruCache<K: Eq + Hash + Clone, V: Clone> {
     capacity: usize,
-    map: HashMap<K, V>,
-    order: VecDeque<K>,
+    map: HashMap<K, Arc<Mutex<Node<K, V>>>>,
+    head: Link<K, V>, // Most recent
+    tail: Link<K, V>, // Least recent
 }
 
-impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
+type Link<K, V> = Option<Arc<Mutex<Node<K, V>>>>;
+
+struct Node<K: Eq + Hash + Clone, V: Clone> {
+    key: K,
+    value: V,
+    prev: Link<K, V>,
+    next: Link<K, V>,
+}
+
+impl<K: Eq + Hash + Clone, V: Clone> LruCache<K, V> {
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
             map: HashMap::new(),
-            order: VecDeque::new(),
+            head: None,
+            tail: None,
         }
     }
 
     /// Get an item from the cache by it's key
     ///
-    /// If it the key exists in the cache return the item and move the key to the front of the order
+    /// If the key exists in the cache return the item and move the key to the front of the order
     /// (last to be removed)
     ///
     /// If it doesn't exist return None
-    pub fn get(&mut self, key: &K) -> Option<&V> {
-        if self.map.contains_key(key) {
-            // This removes the key from the order
-            self.order.retain(|k| k != key);
-            // Push it to the front
-            self.order.push_front(key.clone());
-            self.map.get(key)
+    pub fn get(&mut self, key: &K) -> Option<V> {
+        if let Some(node) = self.map.get(key).cloned() {
+            self.move_to_front(node.clone());
+            Some(node.lock().unwrap().value.clone())
         } else {
             None
         }
@@ -48,18 +57,74 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
     ///
     /// If the key already exists it is updated
     pub fn insert(&mut self, key: K, value: V) {
-        if self.map.contains_key(&key) {
-            // This removes the key from the order so later when we push to the front it's the same as updating
-            self.order.retain(|k| k != &key);
-        } else if self.map.len() == self.capacity {
-            // Remove the least recently used item
-            if let Some(key_to_remove) = self.order.pop_back() {
-                self.map.remove(&key_to_remove);
-            }
+        if let Some(existing) = self.map.get(&key).cloned() {
+            existing.lock().unwrap().value = value;
+            self.move_to_front(existing);
+            return;
         }
 
-        self.order.push_front(key.clone());
-        self.map.insert(key, value);
+        let node = Arc::new(Mutex::new(Node {
+            key: key.clone(),
+            value,
+            prev: None,
+            next: None,
+        }));
+
+        self.push_front(node.clone());
+        self.map.insert(key, node);
+
+        if self.map.len() > self.capacity {
+            if let Some(old_tail) = self.tail.clone() {
+                let key = old_tail.lock().unwrap().key.clone();
+                self.remove(old_tail);
+                self.map.remove(&key);
+            }
+        }
+    }
+
+    /// Remove a node from the cache
+    fn remove(&mut self, node: Arc<Mutex<Node<K, V>>>) {
+        let (prev, next) = {
+            let n = node.lock().unwrap();
+            (n.prev.clone(), n.next.clone())
+        };
+
+        if let Some(ref p) = prev {
+            p.lock().unwrap().next = next.clone();
+        } else {
+            self.head = next.clone();
+        }
+
+        if let Some(ref n) = next {
+            n.lock().unwrap().prev = prev.clone();
+        } else {
+            self.tail = prev.clone();
+        }
+    }
+
+    /// Add a node to the front of the cache
+    fn push_front(&mut self, node: Arc<Mutex<Node<K, V>>>) {
+        {
+            let mut n = node.lock().unwrap();
+            n.prev = None;
+            n.next = self.head.clone();
+        }
+
+        if let Some(ref head) = self.head {
+            head.lock().unwrap().prev = Some(node.clone());
+        }
+
+        self.head = Some(node.clone());
+
+        if self.tail.is_none() {
+            self.tail = Some(node);
+        }
+    }
+
+    /// Move a node to the front of the cache
+    fn move_to_front(&mut self, node: Arc<Mutex<Node<K, V>>>) {
+        self.remove(node.clone());
+        self.push_front(node);
     }
 }
 
@@ -81,7 +146,7 @@ macro_rules! cached {
             {
                 let mut cache_guard = cache.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(v) = cache_guard.get(&$arg) {
-                    return Ok(v.clone());
+                    return Ok(v);
                 }
             } // lock released here
 
