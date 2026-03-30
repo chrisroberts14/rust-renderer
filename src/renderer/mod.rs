@@ -445,7 +445,8 @@ pub(super) fn rasterize_tile(
                         let view_dir = (camera.position - world_pos).normalise();
 
                         let active_lights = if tri.is_light { &[] as &[_] } else { lights };
-                        let [lr, lg, lb] = shade(normal, world_pos, view_dir, active_lights, ambient);
+                        let [lr, lg, lb] =
+                            shade(normal, world_pos, view_dir, active_lights, ambient);
 
                         let [cr, cg, cb, ca] = match &tri.material {
                             Material::Color(c) => *c,

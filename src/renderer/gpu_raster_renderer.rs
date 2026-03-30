@@ -166,7 +166,9 @@ impl GpuRasterRenderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
         let colour_view = colour.create_view(&Default::default());
@@ -634,7 +636,11 @@ impl GpuRasterRenderer {
                 bytes_per_row: Some(w * 4),
                 rows_per_image: Some(h),
             },
-            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
         );
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
@@ -668,7 +674,11 @@ impl GpuRasterRenderer {
                 let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
                 let (_tex, tex_view, sampler) =
                     Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
-                let active_light_buf = if obj.is_light { &empty_light_buf } else { &light_buf };
+                let active_light_buf = if obj.is_light {
+                    &empty_light_buf
+                } else {
+                    &light_buf
+                };
                 let bind_group =
                     self.build_bind_group(&uniform_buf, active_light_buf, &tex_view, &sampler);
 
