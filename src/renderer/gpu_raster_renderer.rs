@@ -39,10 +39,10 @@ struct GpuUniforms {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuLight {
-    position:  [f32; 4],  // xyz = world pos, w = intensity
-    color:     [f32; 4],  // xyz = rgb, w = unused
-    direction: [f32; 4],  // xyz = spot direction, w = cone_angle (0 = point light)
-    falloff:   [f32; 4],  // x = falloff_angle, yzw = padding
+    position:  [f32; 4], // xyz = world pos, w = intensity
+    color:     [f32; 4], // xyz = rgb, w = unused
+    direction: [f32; 4], // xyz = spot direction, w = cone_angle (0 = point light)
+    falloff:   [f32; 4], // x = falloff_angle, yzw = padding
 }
 
 #[repr(C)]
@@ -58,6 +58,7 @@ pub struct GpuRasterRenderer {
     queue: wgpu::Queue,
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
     // RefCell needed because render_objects takes &self but we lazily initialise/resize this
     colour_texture: RefCell<Option<GpuFramebuffer>>,
 }
@@ -93,6 +94,11 @@ fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
     }
 }
 
+/// Rounds `n` up to the next multiple of 256, as required by wgpu's texture copy alignment rules.
+fn align_to_256(n: u32) -> u32 {
+    (n + 255) & !255
+}
+
 impl GpuRasterRenderer {
     /// Creates the renderer, blocking the calling thread until the wgpu device is ready.
     pub fn new() -> Self {
@@ -119,14 +125,16 @@ impl GpuRasterRenderer {
             .await
             .expect("Failed to get device");
 
-        let pipeline = Self::create_pipeline(&device);
-        let wireframe_pipeline = Self::create_wireframe_pipeline(&device);
+        let bind_group_layout = Self::create_bind_group_layout(&device);
+        let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
+        let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
 
         Self {
             device,
             queue,
             pipeline,
             wireframe_pipeline,
+            bind_group_layout,
             colour_texture: RefCell::new(None),
         }
     }
@@ -149,11 +157,7 @@ impl GpuRasterRenderer {
     fn create_gpu_framebuffer(device: &wgpu::Device, w: u32, h: u32) -> GpuFramebuffer {
         let colour = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_colour"),
-            size: wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -165,11 +169,7 @@ impl GpuRasterRenderer {
 
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_depth"),
-            size: wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -187,27 +187,14 @@ impl GpuRasterRenderer {
             mapped_at_creation: false,
         });
 
-        GpuFramebuffer {
-            colour,
-            colour_view,
-            depth_view,
-            readback,
-            width: w,
-            height: h,
-        }
+        GpuFramebuffer { colour, colour_view, depth_view, readback, width: w, height: h }
     }
 
-    /// Builds the solid-shading pipeline using `fs_main` (Phong lighting with texture support).
-    fn create_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("raster_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("raster.wgsl").into()),
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    /// Creates the shared bind group layout used by both render pipelines.
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
-                // Uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -218,7 +205,6 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
-                // LightBlock
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -229,7 +215,6 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
-                // Texture
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -240,7 +225,6 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
-                // Sampler
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -248,120 +232,28 @@ impl GpuRasterRenderer {
                     count: None,
                 },
             ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("raster_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: size_of::<GpuVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3,  // position
-                        1 => Float32x3,  // normal
-                        2 => Float32x2,  // uv
-                        3 => Float32x4,  // color
-                    ],
-                }],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                front_face: wgpu::FrontFace::Cw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
         })
     }
 
-    /// Builds the wireframe pipeline using `fs_wireframe` (flat white) with `PolygonMode::Line`.
-    /// Requires the `POLYGON_MODE_LINE` device feature.
-    fn create_wireframe_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
+    /// Builds a render pipeline. When `wireframe` is true, uses `fs_wireframe` and
+    /// `PolygonMode::Line`; otherwise uses `fs_main` with back-face culling.
+    fn create_pipeline(
+        device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        wireframe: bool,
+    ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("wireframe_shader"),
+            label: Some("raster_shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("raster.wgsl").into()),
         });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Bindings 1-3 are unused by fs_wireframe but must be present to match the layout
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[Some(&bind_group_layout)],
+            bind_group_layouts: &[Some(bind_group_layout)],
             immediate_size: 0,
         });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("wireframe_pipeline"),
+            label: Some(if wireframe { "wireframe_pipeline" } else { "raster_pipeline" }),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -370,17 +262,17 @@ impl GpuRasterRenderer {
                     array_stride: size_of::<GpuVertex>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3,
-                        1 => Float32x3,
-                        2 => Float32x2,
-                        3 => Float32x4,
+                        0 => Float32x3, // position
+                        1 => Float32x3, // normal
+                        2 => Float32x2, // uv
+                        3 => Float32x4, // color
                     ],
                 }],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_wireframe"),
+                entry_point: Some(if wireframe { "fs_wireframe" } else { "fs_main" }),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
@@ -391,8 +283,8 @@ impl GpuRasterRenderer {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Cw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Line,
+                cull_mode: if wireframe { None } else { Some(wgpu::Face::Back) },
+                polygon_mode: if wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill },
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -415,23 +307,13 @@ impl GpuRasterRenderer {
         let mut indices: Vec<u32> = Vec::new();
 
         for (face_idx, &(i0, i1, i2)) in obj.mesh.faces.iter().enumerate() {
-            let (uv_i0, uv_i1, uv_i2) = obj
-                .mesh
-                .uv_faces
-                .get(face_idx)
-                .copied()
-                .unwrap_or((0, 0, 0));
-
+            let (uv_i0, uv_i1, uv_i2) =
+                obj.mesh.uv_faces.get(face_idx).copied().unwrap_or((0, 0, 0));
             let base = verts.len() as u32;
             for (vi, uvi) in [(i0, uv_i0), (i1, uv_i1), (i2, uv_i2)] {
                 let pos = obj.mesh.vertices[vi];
                 let nor = obj.mesh.normals[vi];
-                let uv = obj
-                    .mesh
-                    .uvs
-                    .get(uvi)
-                    .copied()
-                    .unwrap_or(Vec2::new(0.0, 0.0));
+                let uv = obj.mesh.uvs.get(uvi).copied().unwrap_or(Vec2::new(0.0, 0.0));
                 let color = match &obj.material {
                     Material::Color([r, g, b, a]) => [
                         *r as f32 / 255.0,
@@ -508,7 +390,7 @@ impl GpuRasterRenderer {
             let intensity = light.intensity();
             let (dir, cone, falloff) = match light.spot_direction() {
                 Some(d) => (d, light.cone_angle(), light.falloff_angle()),
-                None    => (crate::maths::vec3::Vec3::ZERO, 0.0_f32, 0.0_f32),
+                None => (crate::maths::vec3::Vec3::ZERO, 0.0_f32, 0.0_f32),
             };
             block.lights[i] = GpuLight {
                 position:  [p.x, p.y, p.z, intensity],
@@ -546,11 +428,7 @@ impl GpuRasterRenderer {
             }),
         };
 
-        let size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
+        let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("material_tex"),
             size,
@@ -590,25 +468,18 @@ impl GpuRasterRenderer {
     /// Creates the bind group for a single draw call, wiring the uniform, light, texture, and
     /// sampler buffers to their `@group(0) @binding(N)` slots in the shader.
     fn build_bind_group(
-        device: &wgpu::Device,
-        pipeline: &wgpu::RenderPipeline,
+        &self,
         uniform_buf: &wgpu::Buffer,
         light_buf: &wgpu::Buffer,
         tex_view: &wgpu::TextureView,
         sampler: &wgpu::Sampler,
     ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("per_object_bg"),
-            layout: &pipeline.get_bind_group_layout(0),
+            layout: &self.bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: light_buf.as_entire_binding(),
-                },
+                wgpu::BindGroupEntry { binding: 0, resource: uniform_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: light_buf.as_entire_binding() },
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(tex_view),
@@ -619,6 +490,119 @@ impl GpuRasterRenderer {
                 },
             ],
         })
+    }
+
+    /// Submits the encoder, waits for the GPU to finish, then copies the readback buffer into
+    /// the CPU framebuffer pixel-by-pixel.
+    fn readback_to_framebuffer(
+        &self,
+        mut encoder: wgpu::CommandEncoder,
+        gpu_fb: &GpuFramebuffer,
+        framebuffer: &Framebuffer,
+    ) {
+        let (w, h) = (gpu_fb.width, gpu_fb.height);
+        let bytes_per_row = align_to_256(w * 4);
+
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &gpu_fb.colour,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &gpu_fb.readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(h),
+                },
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+
+        let submission_index = self.queue.submit([encoder.finish()]);
+        let (tx, rx) = std::sync::mpsc::channel();
+        gpu_fb.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
+        self.device
+            .poll(wgpu::PollType::Wait { submission_index: Some(submission_index), timeout: None })
+            .expect("GPU poll failed");
+        rx.recv().unwrap().unwrap();
+
+        {
+            let mapped = gpu_fb.readback.slice(..).get_mapped_range();
+            for y in 0..h as usize {
+                let row_start = y * bytes_per_row as usize;
+                let src = &mapped[row_start..row_start + w as usize * 4];
+                for x in 0..w as usize {
+                    let b = x * 4;
+                    framebuffer.set_pixel(x, y, [src[b], src[b + 1], src[b + 2], src[b + 3]]);
+                }
+            }
+        }
+        gpu_fb.readback.unmap();
+    }
+
+    /// Internal render method shared by `render_objects` and `render_wireframe`.
+    /// When `wireframe` is true the wireframe pipeline is used and lights are ignored.
+    fn render_scene(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        lights: &[Arc<dyn Light>],
+        framebuffer: &Framebuffer,
+        ambient: f32,
+        wireframe: bool,
+    ) -> RenderStats {
+        let (w, h) = (framebuffer.width as u32, framebuffer.height as u32);
+        let gpu_fb = self.ensure_framebuffer(w, h);
+        let pipeline = if wireframe { &self.wireframe_pipeline } else { &self.pipeline };
+
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &gpu_fb.colour_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &gpu_fb.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
+
+            pass.set_pipeline(pipeline);
+            let light_buf = Self::build_light_block(&self.device, lights);
+            for obj in objects {
+                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
+                let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
+                let (_tex, tex_view, sampler) =
+                    Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
+                let bind_group =
+                    self.build_bind_group(&uniform_buf, &light_buf, &tex_view, &sampler);
+
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.set_vertex_buffer(0, vbuf.slice(..));
+                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..index_count, 0, 0..1);
+            }
+        }
+
+        self.readback_to_framebuffer(encoder, &*gpu_fb, framebuffer);
+        RenderStats {
+            triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
+            tile_count: 0,
+        }
     }
 }
 
@@ -637,125 +621,7 @@ impl super::Renderer for GpuRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> RenderStats {
-        let w = framebuffer.width as u32;
-        let h = framebuffer.height as u32;
-
-        let gpu_fb = self.ensure_framebuffer(w, h);
-
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &gpu_fb.colour_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &gpu_fb.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.pipeline);
-
-            for obj in objects {
-                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
-                let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
-                let light_buf = Self::build_light_block(&self.device, lights);
-                let (_tex, tex_view, sampler) =
-                    Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
-                let bind_group = Self::build_bind_group(
-                    &self.device,
-                    &self.pipeline,
-                    &uniform_buf,
-                    &light_buf,
-                    &tex_view,
-                    &sampler,
-                );
-
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, vbuf.slice(..));
-                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..index_count, 0, 0..1);
-            }
-        }
-
-        // Copy render texture → readback buffer
-        let bytes_per_row = align_to_256(w * 4);
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &gpu_fb.colour,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &gpu_fb.readback,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bytes_per_row),
-                    rows_per_image: Some(h),
-                },
-            },
-            wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        let submission_index = self.queue.submit([encoder.finish()]);
-
-        // Map + copy to CPU framebuffer
-        let (tx, rx) = std::sync::mpsc::channel();
-        gpu_fb
-            .readback
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission_index),
-                timeout: None,
-            })
-            .expect("GPU poll failed");
-        rx.recv().unwrap().unwrap();
-
-        {
-            let mapped = gpu_fb.readback.slice(..).get_mapped_range();
-            for y in 0..h as usize {
-                let row_start = y * bytes_per_row as usize;
-                let src_row = &mapped[row_start..row_start + w as usize * 4];
-                for x in 0..w as usize {
-                    let base = x * 4;
-                    framebuffer.set_pixel(
-                        x,
-                        y,
-                        [
-                            src_row[base],
-                            src_row[base + 1],
-                            src_row[base + 2],
-                            src_row[base + 3],
-                        ],
-                    );
-                }
-            }
-        }
-        gpu_fb.readback.unmap();
-
-        RenderStats {
-            triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
-            tile_count: 0,
-        }
+        self.render_scene(objects, camera, lights, framebuffer, ambient, false)
     }
 
     /// Renders all objects as flat-white wireframes using `PolygonMode::Line`, then copies the
@@ -766,126 +632,6 @@ impl super::Renderer for GpuRasterRenderer {
         camera: &Camera,
         framebuffer: &Framebuffer,
     ) -> RenderStats {
-        let w = framebuffer.width as u32;
-        let h = framebuffer.height as u32;
-
-        let gpu_fb = self.ensure_framebuffer(w, h);
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &gpu_fb.colour_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &gpu_fb.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
-            });
-
-            pass.set_pipeline(&self.wireframe_pipeline);
-
-            for obj in objects {
-                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
-                let uniform_buf = Self::build_uniforms(&self.device, obj, camera, 1.0);
-                let light_buf = Self::build_light_block(&self.device, &[]);
-                let (_tex, tex_view, sampler) =
-                    Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
-                let bind_group = Self::build_bind_group(
-                    &self.device,
-                    &self.wireframe_pipeline,
-                    &uniform_buf,
-                    &light_buf,
-                    &tex_view,
-                    &sampler,
-                );
-
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, vbuf.slice(..));
-                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..index_count, 0, 0..1);
-            }
-        }
-
-        let bytes_per_row = align_to_256(w * 4);
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &gpu_fb.colour,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &gpu_fb.readback,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bytes_per_row),
-                    rows_per_image: Some(h),
-                },
-            },
-            wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        let submission_index = self.queue.submit([encoder.finish()]);
-
-        let (tx, rx) = std::sync::mpsc::channel();
-        gpu_fb
-            .readback
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission_index),
-                timeout: None,
-            })
-            .expect("GPU poll failed");
-        rx.recv().unwrap().unwrap();
-
-        {
-            let mapped = gpu_fb.readback.slice(..).get_mapped_range();
-            for y in 0..h as usize {
-                let row_start = y * bytes_per_row as usize;
-                let src_row = &mapped[row_start..row_start + w as usize * 4];
-                for x in 0..w as usize {
-                    let base = x * 4;
-                    framebuffer.set_pixel(
-                        x,
-                        y,
-                        [
-                            src_row[base],
-                            src_row[base + 1],
-                            src_row[base + 2],
-                            src_row[base + 3],
-                        ],
-                    );
-                }
-            }
-        }
-        gpu_fb.readback.unmap();
-
-        RenderStats {
-            triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
-            tile_count: 0,
-        }
+        self.render_scene(objects, camera, &[], framebuffer, 1.0, true)
     }
-}
-
-/// Rounds `n` up to the next multiple of 256, as required by wgpu's texture copy alignment rules.
-fn align_to_256(n: u32) -> u32 {
-    (n + 255) & !255
 }
