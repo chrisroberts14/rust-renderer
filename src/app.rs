@@ -44,6 +44,10 @@ impl App {
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
+
+        let renderer_choice = renderer.renderer_choice();
+        let overlay = StatsOverlay::with_defaults(vec![("renderer_choice", &format!("{}", renderer_choice))]);
+
         match scene_option {
             Some(scene) => Ok(Self {
                 window: None,
@@ -54,7 +58,7 @@ impl App {
                 fast_move: false,
                 scene_files: None,
                 renderer,
-                overlay: StatsOverlay::default(),
+                overlay,
                 key_bindings,
             }),
             _ => {
@@ -71,7 +75,7 @@ impl App {
                     fast_move: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
-                    overlay: StatsOverlay::default(),
+                    overlay,
                     key_bindings,
                 })
             }
@@ -168,6 +172,8 @@ impl App {
             Action::NextRenderer => {
                 // Move to the next renderer
                 let choice = self.renderer.renderer_choice().next();
+                // Also write the renderer type to the overlay
+                self.overlay.add("renderer_type", &format!("{}", choice));
                 self.renderer = choice.into_renderer();
                 Ok(())
             }

@@ -17,6 +17,7 @@ use crate::scenes::material::Material;
 use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
+use strum_macros::Display;
 
 const SHININESS: i32 = 32;
 
@@ -28,7 +29,7 @@ pub struct RenderStats {
 
 /// Enum to allow for choosing a given Renderer
 /// Once a renderer is implemented it will need to be "registered" here
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, ValueEnum, Display)]
 pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
