@@ -1,4 +1,4 @@
-use super::{prepare_render, rasterize_tile, RendererChoice};
+use super::{RendererChoice, prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::{RenderStats, draw_wireframe};

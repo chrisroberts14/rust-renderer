@@ -39,10 +39,10 @@ struct GpuUniforms {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuLight {
-    position:  [f32; 4], // xyz = world pos, w = intensity
-    color:     [f32; 4], // xyz = rgb, w = unused
+    position: [f32; 4],  // xyz = world pos, w = intensity
+    color: [f32; 4],     // xyz = rgb, w = unused
     direction: [f32; 4], // xyz = spot direction, w = cone_angle (0 = point light)
-    falloff:   [f32; 4], // x = falloff_angle, yzw = padding
+    falloff: [f32; 4],   // x = falloff_angle, yzw = padding
 }
 
 #[repr(C)]
@@ -157,7 +157,11 @@ impl GpuRasterRenderer {
     fn create_gpu_framebuffer(device: &wgpu::Device, w: u32, h: u32) -> GpuFramebuffer {
         let colour = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_colour"),
-            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -169,7 +173,11 @@ impl GpuRasterRenderer {
 
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_depth"),
-            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -187,7 +195,14 @@ impl GpuRasterRenderer {
             mapped_at_creation: false,
         });
 
-        GpuFramebuffer { colour, colour_view, depth_view, readback, width: w, height: h }
+        GpuFramebuffer {
+            colour,
+            colour_view,
+            depth_view,
+            readback,
+            width: w,
+            height: h,
+        }
     }
 
     /// Creates the shared bind group layout used by both render pipelines.
@@ -253,7 +268,11 @@ impl GpuRasterRenderer {
         });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(if wireframe { "wireframe_pipeline" } else { "raster_pipeline" }),
+            label: Some(if wireframe {
+                "wireframe_pipeline"
+            } else {
+                "raster_pipeline"
+            }),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -283,8 +302,16 @@ impl GpuRasterRenderer {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Cw,
-                cull_mode: if wireframe { None } else { Some(wgpu::Face::Back) },
-                polygon_mode: if wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill },
+                cull_mode: if wireframe {
+                    None
+                } else {
+                    Some(wgpu::Face::Back)
+                },
+                polygon_mode: if wireframe {
+                    wgpu::PolygonMode::Line
+                } else {
+                    wgpu::PolygonMode::Fill
+                },
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -307,13 +334,22 @@ impl GpuRasterRenderer {
         let mut indices: Vec<u32> = Vec::new();
 
         for (face_idx, &(i0, i1, i2)) in obj.mesh.faces.iter().enumerate() {
-            let (uv_i0, uv_i1, uv_i2) =
-                obj.mesh.uv_faces.get(face_idx).copied().unwrap_or((0, 0, 0));
+            let (uv_i0, uv_i1, uv_i2) = obj
+                .mesh
+                .uv_faces
+                .get(face_idx)
+                .copied()
+                .unwrap_or((0, 0, 0));
             let base = verts.len() as u32;
             for (vi, uvi) in [(i0, uv_i0), (i1, uv_i1), (i2, uv_i2)] {
                 let pos = obj.mesh.vertices[vi];
                 let nor = obj.mesh.normals[vi];
-                let uv = obj.mesh.uvs.get(uvi).copied().unwrap_or(Vec2::new(0.0, 0.0));
+                let uv = obj
+                    .mesh
+                    .uvs
+                    .get(uvi)
+                    .copied()
+                    .unwrap_or(Vec2::new(0.0, 0.0));
                 let color = match &obj.material {
                     Material::Color([r, g, b, a]) => [
                         *r as f32 / 255.0,
@@ -376,10 +412,10 @@ impl GpuRasterRenderer {
     fn build_light_block(device: &wgpu::Device, lights: &[Arc<dyn Light>]) -> wgpu::Buffer {
         let mut block = GpuLightBlock {
             lights: [GpuLight {
-                position:  [0.0; 4],
-                color:     [0.0; 4],
+                position: [0.0; 4],
+                color: [0.0; 4],
                 direction: [0.0; 4],
-                falloff:   [0.0; 4],
+                falloff: [0.0; 4],
             }; MAX_LIGHTS],
             light_count: lights.len().min(MAX_LIGHTS) as u32,
             _pad: [0; 3],
@@ -393,10 +429,10 @@ impl GpuRasterRenderer {
                 None => (crate::maths::vec3::Vec3::ZERO, 0.0_f32, 0.0_f32),
             };
             block.lights[i] = GpuLight {
-                position:  [p.x, p.y, p.z, intensity],
-                color:     [c[0], c[1], c[2], 1.0],
+                position: [p.x, p.y, p.z, intensity],
+                color: [c[0], c[1], c[2], 1.0],
                 direction: [dir.x, dir.y, dir.z, cone],
-                falloff:   [falloff, 0.0, 0.0, 0.0],
+                falloff: [falloff, 0.0, 0.0, 0.0],
             };
         }
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -428,7 +464,11 @@ impl GpuRasterRenderer {
             }),
         };
 
-        let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("material_tex"),
             size,
@@ -478,8 +518,14 @@ impl GpuRasterRenderer {
             label: Some("per_object_bg"),
             layout: &self.bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: uniform_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: light_buf.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: light_buf.as_entire_binding(),
+                },
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(tex_view),
@@ -518,14 +564,24 @@ impl GpuRasterRenderer {
                     rows_per_image: Some(h),
                 },
             },
-            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
         );
 
         let submission_index = self.queue.submit([encoder.finish()]);
         let (tx, rx) = std::sync::mpsc::channel();
-        gpu_fb.readback.slice(..).map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
+        gpu_fb
+            .readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
         self.device
-            .poll(wgpu::PollType::Wait { submission_index: Some(submission_index), timeout: None })
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission_index),
+                timeout: None,
+            })
             .expect("GPU poll failed");
         rx.recv().unwrap().unwrap();
 
@@ -556,7 +612,11 @@ impl GpuRasterRenderer {
     ) -> RenderStats {
         let (w, h) = (framebuffer.width as u32, framebuffer.height as u32);
         let gpu_fb = self.ensure_framebuffer(w, h);
-        let pipeline = if wireframe { &self.wireframe_pipeline } else { &self.pipeline };
+        let pipeline = if wireframe {
+            &self.wireframe_pipeline
+        } else {
+            &self.pipeline
+        };
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {

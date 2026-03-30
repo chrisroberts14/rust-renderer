@@ -18,7 +18,7 @@ pub enum Action {
     DecreaseTiles,
     ToggleOverlay,
     ReleaseMouse,
-    NextRenderer
+    NextRenderer,
 }
 
 fn action_from_str(s: &str) -> Option<Action> {
