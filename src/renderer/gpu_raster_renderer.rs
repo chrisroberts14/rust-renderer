@@ -151,7 +151,7 @@ impl GpuRasterRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
@@ -272,7 +272,7 @@ impl GpuRasterRenderer {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -374,7 +374,7 @@ impl GpuRasterRenderer {
                 module: &shader,
                 entry_point: Some("fs_wireframe"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -489,8 +489,10 @@ impl GpuRasterRenderer {
         for (i, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
             let p = light.position();
             let c = light.colour();
+            // intensity_at(position()) = intensity / (1 + 0) = raw intensity scalar
+            let intensity = light.intensity_at(p);
             block.lights[i] = GpuLight {
-                position: [p.x, p.y, p.z, 1.0],
+                position: [p.x, p.y, p.z, intensity],
                 color: [c[0], c[1], c[2], 1.0],
             };
         }
@@ -532,7 +534,7 @@ impl GpuRasterRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });

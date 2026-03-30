@@ -11,7 +11,7 @@ struct Uniforms {
 };
 
 struct Light {
-    position: vec4<f32>,
+    position: vec4<f32>,  // xyz = world position, w = raw intensity
     colour: vec4<f32>
 };
 
@@ -75,11 +75,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var specular = vec3<f32>(0.0);
 
     for (var i = 0u; i < lights.light_count; i++) {
-      let lpos   = lights.lights[i].position.xyz;
-      let lcol   = lights.lights[i].colour.rgb;
-      let ldir   = normalize(lpos - in.world_pos);
-      let ndotl  = max(dot(in.normal, ldir), 0.0);
-      diffuse   += ndotl * lcol;
+      let lpos      = lights.lights[i].position.xyz;
+      let intensity = lights.lights[i].position.w;
+      let diff      = lpos - in.world_pos;
+      let dist_sq   = dot(diff, diff);
+      let atten     = intensity / (1.0 + dist_sq);
+      let lcol      = lights.lights[i].colour.rgb * atten;
+      let ldir      = normalize(diff);
+      let ndotl     = max(dot(in.normal, ldir), 0.0);
+      diffuse      += ndotl * lcol;
       if ndotl > 0.0 {
           let refl  = reflect(-ldir, in.normal);
           specular += pow(max(dot(refl, view_dir), 0.0), SHININESS) * lcol;
