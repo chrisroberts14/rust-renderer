@@ -69,11 +69,9 @@ impl Scene {
         }
     }
 
-    /// Renders small box representations of each point light for debugging.
-    /// Light boxes are rendered unlit so their colour always matches the light colour.
-    pub fn render_lights(&mut self, renderer: &dyn Renderer) {
-        let light_objects: Vec<Object> = self
-            .lights
+    /// Builds small box representations of each light source for debug rendering.
+    fn build_light_objects(&self) -> Vec<Object> {
+        self.lights
             .iter()
             .map(|light| {
                 let c = light.colour();
@@ -92,31 +90,32 @@ impl Scene {
                     },
                     Material::Color(colour),
                 )
+                .as_light()
             })
-            .collect();
-
-        // Pass empty lights — light boxes should appear unlit.
-        self.dispatch_render(renderer, &light_objects, &[] as &[Arc<dyn Light>]);
+            .collect()
     }
 
     /// Helper method to render the whole scene
     ///
     /// Clears the framebuffer then does the following:
     /// 1. Draw the skybox
-    /// 2. Render any lights if enabled
-    /// 3. Render the rest of the objects in the scene
+    /// 2. Render the scene objects (with light source boxes appended, if enabled)
     pub fn render_scene(&mut self, renderer: &dyn Renderer) -> RenderStats {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
         }
-        if self.settings.render_lights {
-            self.render_lights(renderer);
-        }
-        self.dispatch_render(
-            renderer,
-            &self.objects.read().unwrap_or_else(|e| e.into_inner()),
-            &self.lights,
-        )
+        let objects_guard = self.objects.read().unwrap_or_else(|e| e.into_inner());
+        let objects: Vec<Object> = if self.settings.render_lights {
+            objects_guard
+                .iter()
+                .cloned()
+                .chain(self.build_light_objects())
+                .collect()
+        } else {
+            objects_guard.iter().cloned().collect()
+        };
+        drop(objects_guard);
+        self.dispatch_render(renderer, &objects, &self.lights)
     }
 }

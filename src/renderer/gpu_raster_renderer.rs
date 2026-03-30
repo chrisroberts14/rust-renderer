@@ -166,7 +166,7 @@ impl GpuRasterRenderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
         let colour_view = colour.create_view(&Default::default());
@@ -618,6 +618,25 @@ impl GpuRasterRenderer {
             &self.pipeline
         };
 
+        // Seed the GPU colour texture from the CPU framebuffer so that the skybox
+        // (drawn directly to the CPU framebuffer) is preserved in the GPU render pass.
+        // write_texture flushes before the next submit, so the render pass LoadOp::Load sees it.
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &gpu_fb.colour,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            framebuffer.as_bytes(),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(w * 4),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
+
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -626,7 +645,7 @@ impl GpuRasterRenderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -643,13 +662,15 @@ impl GpuRasterRenderer {
 
             pass.set_pipeline(pipeline);
             let light_buf = Self::build_light_block(&self.device, lights);
+            let empty_light_buf = Self::build_light_block(&self.device, &[]);
             for obj in objects {
                 let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
                 let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
                 let (_tex, tex_view, sampler) =
                     Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
+                let active_light_buf = if obj.is_light { &empty_light_buf } else { &light_buf };
                 let bind_group =
-                    self.build_bind_group(&uniform_buf, &light_buf, &tex_view, &sampler);
+                    self.build_bind_group(&uniform_buf, active_light_buf, &tex_view, &sampler);
 
                 pass.set_bind_group(0, &bind_group, &[]);
                 pass.set_vertex_buffer(0, vbuf.slice(..));

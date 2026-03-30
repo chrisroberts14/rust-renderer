@@ -142,6 +142,7 @@ pub struct PreparedTriangle {
     screen: [Vec2; 3],
     depths: [f32; 3],
     material: Material,
+    is_light: bool,
 }
 
 fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
@@ -333,6 +334,7 @@ pub(super) fn prepare_object(
                 screen: [p0, p1, p2],
                 depths: [z0, z1, z2],
                 material: object.material.clone(),
+                is_light: object.is_light,
             });
         }
     }
@@ -442,7 +444,8 @@ pub(super) fn rasterize_tile(
                         let world_pos = v0.world * w0 + v1.world * w1 + v2.world * w2;
                         let view_dir = (camera.position - world_pos).normalise();
 
-                        let [lr, lg, lb] = shade(normal, world_pos, view_dir, lights, ambient);
+                        let active_lights = if tri.is_light { &[] as &[_] } else { lights };
+                        let [lr, lg, lb] = shade(normal, world_pos, view_dir, active_lights, ambient);
 
                         let [cr, cg, cb, ca] = match &tri.material {
                             Material::Color(c) => *c,
