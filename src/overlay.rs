@@ -26,4 +26,12 @@ impl StatsOverlay {
             y += 20;
         }
     }
+
+    pub fn with_defaults(defaults: Vec<(&str, &str)>) -> Self {
+        let mut def = Self::default();
+        for (key, val) in defaults {
+            def.add(key, val);
+        }
+        def
+    }
 }
