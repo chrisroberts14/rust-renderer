@@ -55,6 +55,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
+@fragment
+fn fs_wireframe(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+
 const SHININESS: f32 = 16.0;
 
 @fragment
