@@ -88,12 +88,14 @@ pub trait Renderer {
 
     /// Increase the number of tiles
     /// Is a no-op if the renderer is not tile based
+    #[allow(unused_variables)]
     fn increase_tile_count(&mut self, delta: usize) {
         ()
     }
 
     /// Decrease the number of tiles
     /// Is a no-op if the renderer is not tile based
+    #[allow(unused_variables)]
     fn decrease_tile_count(&mut self, delta: usize) {
         ()
     }
