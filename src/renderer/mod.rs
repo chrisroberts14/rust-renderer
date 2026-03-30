@@ -1,6 +1,6 @@
 pub mod multi_thread_raster_renderer;
 pub mod single_thread_raster_renderer;
-mod cuda_renderer;
+pub mod gpu_raster_renderer;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
@@ -16,6 +16,7 @@ use crate::scenes::material::Material;
 use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
+use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
 
 const SHININESS: i32 = 32;
 
@@ -31,6 +32,7 @@ pub struct RenderStats {
 pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
+    Gpu
 }
 
 impl RendererChoice {
@@ -39,6 +41,7 @@ impl RendererChoice {
         match self {
             RendererChoice::SingleThreadRaster => Box::new(SingleThreadRasterRenderer::new(32)),
             RendererChoice::MultiThreadRaster => Box::new(MultiThreadRasterRenderer::new(32)),
+            RendererChoice::Gpu => Box::new(GpuRasterRenderer::new())
         }
     }
 }

@@ -7,7 +7,7 @@ use rust_renderer::renderer::RendererChoice;
 #[derive(Parser)]
 struct Args {
     /// Which renderer to use
-    #[arg(long, value_enum, default_value_t = RendererChoice::MultiThreadRaster)]
+    #[arg(long, value_enum, default_value_t = RendererChoice::Gpu)]
     renderer: RendererChoice,
 }
 
