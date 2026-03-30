@@ -46,7 +46,7 @@ impl App {
         let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
 
         let renderer_choice = renderer.renderer_choice();
-        let overlay = StatsOverlay::with_defaults(vec![("renderer_choice", &format!("{}", renderer_choice))]);
+        let overlay = StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer_choice))]);
 
         match scene_option {
             Some(scene) => Ok(Self {

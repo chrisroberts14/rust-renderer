@@ -11,8 +11,10 @@ struct Uniforms {
 };
 
 struct Light {
-    position: vec4<f32>,  // xyz = world position, w = raw intensity
-    colour: vec4<f32>
+    position:  vec4<f32>,  // xyz = world position, w = intensity
+    colour:    vec4<f32>,  // xyz = rgb
+    direction: vec4<f32>,  // xyz = spot direction, w = cone_angle (0 = point light)
+    falloff:   vec4<f32>,  // x = falloff_angle
 };
 
 struct LightBlock {
@@ -75,15 +77,35 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var specular = vec3<f32>(0.0);
 
     for (var i = 0u; i < lights.light_count; i++) {
-      let lpos      = lights.lights[i].position.xyz;
-      let intensity = lights.lights[i].position.w;
-      let diff      = lpos - in.world_pos;
-      let dist_sq   = dot(diff, diff);
-      let atten     = intensity / (1.0 + dist_sq);
-      let lcol      = lights.lights[i].colour.rgb * atten;
-      let ldir      = normalize(diff);
-      let ndotl     = max(dot(in.normal, ldir), 0.0);
-      diffuse      += ndotl * lcol;
+      let lpos       = lights.lights[i].position.xyz;
+      let intensity  = lights.lights[i].position.w;
+      let diff       = lpos - in.world_pos;
+      let dist_sq    = dot(diff, diff);
+      let dist_atten = intensity / (1.0 + dist_sq);
+
+      // Cone attenuation — cone_angle == 0 means point light, skip cone test.
+      var cone_atten = 1.0;
+      let cone_angle = lights.lights[i].direction.w;
+      if cone_angle > 0.0 {
+          let spot_dir     = lights.lights[i].direction.xyz;
+          let falloff_angle = lights.lights[i].falloff.x;
+          let to_point     = normalize(in.world_pos - lpos);
+          let angle        = acos(clamp(dot(spot_dir, to_point), -1.0, 1.0));
+          if angle > cone_angle {
+              cone_atten = 0.0;
+          } else {
+              let inner_angle = cone_angle - falloff_angle;
+              if angle > inner_angle {
+                  let t = (angle - inner_angle) / falloff_angle;
+                  cone_atten = 1.0 - t * t * (3.0 - 2.0 * t);
+              }
+          }
+      }
+
+      let lcol  = lights.lights[i].colour.rgb * (dist_atten * cone_atten);
+      let ldir  = normalize(diff);
+      let ndotl = max(dot(in.normal, ldir), 0.0);
+      diffuse  += ndotl * lcol;
       if ndotl > 0.0 {
           let refl  = reflect(-ldir, in.normal);
           specular += pow(max(dot(refl, view_dir), 0.0), SHININESS) * lcol;

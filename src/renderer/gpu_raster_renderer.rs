@@ -38,8 +38,10 @@ struct GpuUniforms {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuLight {
-    position: [f32; 4],
-    color: [f32; 4],
+    position:  [f32; 4],  // xyz = world pos, w = intensity
+    color:     [f32; 4],  // xyz = rgb, w = unused
+    direction: [f32; 4],  // xyz = spot direction, w = cone_angle (0 = point light)
+    falloff:   [f32; 4],  // x = falloff_angle, yzw = padding
 }
 
 #[repr(C)]
@@ -480,8 +482,10 @@ impl GpuRasterRenderer {
     fn build_light_block(device: &wgpu::Device, lights: &[Arc<dyn Light>]) -> wgpu::Buffer {
         let mut block = GpuLightBlock {
             lights: [GpuLight {
-                position: [0.0; 4],
-                color: [0.0; 4],
+                position:  [0.0; 4],
+                color:     [0.0; 4],
+                direction: [0.0; 4],
+                falloff:   [0.0; 4],
             }; MAX_LIGHTS],
             light_count: lights.len().min(MAX_LIGHTS) as u32,
             _pad: [0; 3],
@@ -489,11 +493,16 @@ impl GpuRasterRenderer {
         for (i, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
             let p = light.position();
             let c = light.colour();
-            // intensity_at(position()) = intensity / (1 + 0) = raw intensity scalar
-            let intensity = light.intensity_at(p);
+            let intensity = light.intensity();
+            let (dir, cone, falloff) = match light.spot_direction() {
+                Some(d) => (d, light.cone_angle(), light.falloff_angle()),
+                None    => (crate::maths::vec3::Vec3::ZERO, 0.0_f32, 0.0_f32),
+            };
             block.lights[i] = GpuLight {
-                position: [p.x, p.y, p.z, intensity],
-                color: [c[0], c[1], c[2], 1.0],
+                position:  [p.x, p.y, p.z, intensity],
+                color:     [c[0], c[1], c[2], 1.0],
+                direction: [dir.x, dir.y, dir.z, cone],
+                falloff:   [falloff, 0.0, 0.0, 0.0],
             };
         }
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

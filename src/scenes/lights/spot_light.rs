@@ -78,4 +78,20 @@ impl Light for SpotLight {
     fn colour(&self) -> [f32; 3] {
         self.colour
     }
+
+    fn intensity(&self) -> f32 {
+        self.intensity
+    }
+
+    fn spot_direction(&self) -> Option<Vec3> {
+        Some(self.direction)
+    }
+
+    fn cone_angle(&self) -> f32 {
+        self.cone_angle
+    }
+
+    fn falloff_angle(&self) -> f32 {
+        self.falloff_angle
+    }
 }

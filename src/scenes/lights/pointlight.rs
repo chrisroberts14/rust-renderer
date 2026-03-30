@@ -48,4 +48,8 @@ impl Light for PointLight {
     fn colour(&self) -> [f32; 3] {
         self.colour
     }
+
+    fn intensity(&self) -> f32 {
+        self.intensity
+    }
 }
