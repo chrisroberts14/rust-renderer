@@ -10,7 +10,8 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-/// A renderer that runs on a GPU
+/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
+/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
 
 const MAX_LIGHTS: usize = 8;
 
@@ -93,10 +94,12 @@ fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
 }
 
 impl GpuRasterRenderer {
+    /// Creates the renderer, blocking the calling thread until the wgpu device is ready.
     pub fn new() -> Self {
         pollster::block_on(Self::init_async())
     }
 
+    /// Requests a high-performance adapter and device, then compiles both render pipelines.
     async fn init_async() -> Self {
         let instance = wgpu::Instance::default();
         let adapter = instance
@@ -141,6 +144,8 @@ impl GpuRasterRenderer {
         std::cell::Ref::map(self.colour_texture.borrow(), |f| f.as_ref().unwrap())
     }
 
+    /// Allocates the offscreen colour texture, depth texture, and CPU-readable readback buffer
+    /// for a framebuffer of the given dimensions.
     fn create_gpu_framebuffer(device: &wgpu::Device, w: u32, h: u32) -> GpuFramebuffer {
         let colour = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_colour"),
@@ -192,6 +197,7 @@ impl GpuRasterRenderer {
         }
     }
 
+    /// Builds the solid-shading pipeline using `fs_main` (Phong lighting with texture support).
     fn create_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("raster_shader"),
@@ -297,6 +303,8 @@ impl GpuRasterRenderer {
         })
     }
 
+    /// Builds the wireframe pipeline using `fs_wireframe` (flat white) with `PolygonMode::Line`.
+    /// Requires the `POLYGON_MODE_LINE` device feature.
     fn create_wireframe_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("wireframe_shader"),
@@ -400,6 +408,8 @@ impl GpuRasterRenderer {
         })
     }
 
+    /// Converts an [`Object`]'s mesh into interleaved [`GpuVertex`] data and uploads it to a
+    /// vertex buffer and index buffer. Returns both buffers and the index count.
     fn upload_object(device: &wgpu::Device, obj: &Object) -> (wgpu::Buffer, wgpu::Buffer, u32) {
         let mut verts: Vec<GpuVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
@@ -454,6 +464,8 @@ impl GpuRasterRenderer {
         (vbuf, ibuf, indices.len() as u32)
     }
 
+    /// Packs per-object transform matrices, camera data, and ambient intensity into a uniform
+    /// buffer. Matrices are transposed from row-major (Rust) to column-major (WGSL).
     fn build_uniforms(
         device: &wgpu::Device,
         obj: &Object,
@@ -477,6 +489,8 @@ impl GpuRasterRenderer {
         })
     }
 
+    /// Packs all scene lights into a `GpuLightBlock` uniform buffer (up to `MAX_LIGHTS`).
+    /// Point lights have `direction.w == 0`; spot lights carry their cone and falloff angles.
     fn build_light_block(device: &wgpu::Device, lights: &[Arc<dyn Light>]) -> wgpu::Buffer {
         let mut block = GpuLightBlock {
             lights: [GpuLight {
@@ -510,6 +524,8 @@ impl GpuRasterRenderer {
         })
     }
 
+    /// Uploads the object's material as a GPU texture. For `Material::Color` a 1×1 texture is
+    /// created; for `Material::Texture` the full image is rasterised row-by-row and uploaded.
     fn get_or_create_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -571,6 +587,8 @@ impl GpuRasterRenderer {
         (texture, view, sampler)
     }
 
+    /// Creates the bind group for a single draw call, wiring the uniform, light, texture, and
+    /// sampler buffers to their `@group(0) @binding(N)` slots in the shader.
     fn build_bind_group(
         device: &wgpu::Device,
         pipeline: &wgpu::RenderPipeline,
@@ -609,6 +627,8 @@ impl super::Renderer for GpuRasterRenderer {
         RendererChoice::Gpu
     }
 
+    /// Renders all objects with Phong shading, copies the result from the GPU to the CPU
+    /// framebuffer, and returns triangle statistics.
     fn render_objects(
         &self,
         objects: &[Object],
@@ -738,6 +758,8 @@ impl super::Renderer for GpuRasterRenderer {
         }
     }
 
+    /// Renders all objects as flat-white wireframes using `PolygonMode::Line`, then copies the
+    /// result to the CPU framebuffer.
     fn render_wireframe(
         &self,
         objects: &[Object],
@@ -863,6 +885,7 @@ impl super::Renderer for GpuRasterRenderer {
     }
 }
 
+/// Rounds `n` up to the next multiple of 256, as required by wgpu's texture copy alignment rules.
 fn align_to_256(n: u32) -> u32 {
     (n + 255) & !255
 }
