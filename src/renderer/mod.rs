@@ -1,5 +1,6 @@
 pub mod multi_thread_raster_renderer;
 pub mod single_thread_raster_renderer;
+mod cuda_renderer;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
@@ -70,11 +71,15 @@ pub trait Renderer {
 
     /// Increase the number of tiles
     /// Is a no-op if the renderer is not tile based
-    fn increase_tile_count(&mut self, delta: usize);
+    fn increase_tile_count(&mut self, delta: usize) {
+        ()
+    }
 
     /// Decrease the number of tiles
     /// Is a no-op if the renderer is not tile based
-    fn decrease_tile_count(&mut self, delta: usize);
+    fn decrease_tile_count(&mut self, delta: usize) {
+        ()
+    }
 }
 
 /// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile
