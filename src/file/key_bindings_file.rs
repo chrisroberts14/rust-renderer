@@ -18,6 +18,7 @@ pub enum Action {
     DecreaseTiles,
     ToggleOverlay,
     ReleaseMouse,
+    NextRenderer
 }
 
 fn action_from_str(s: &str) -> Option<Action> {
@@ -36,6 +37,7 @@ fn action_from_str(s: &str) -> Option<Action> {
         "decrease_tiles" => Some(Action::DecreaseTiles),
         "toggle_overlay" => Some(Action::ToggleOverlay),
         "release_mouse" => Some(Action::ReleaseMouse),
+        "next_renderer" => Some(Action::NextRenderer),
         _ => None,
     }
 }
@@ -58,6 +60,7 @@ const DEFAULTS: &[(&str, &str)] = &[
     ("decrease_tiles", "y"),
     ("toggle_overlay", "f1"),
     ("release_mouse", "escape"),
+    ("next_renderer", "r"),
 ];
 
 /// Runtime key bindings mapping key strings to actions.

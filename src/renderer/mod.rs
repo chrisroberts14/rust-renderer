@@ -44,6 +44,16 @@ impl RendererChoice {
             RendererChoice::Gpu => Box::new(GpuRasterRenderer::new()),
         }
     }
+
+    /// Get the next renderer in the cycle
+    /// This is a hacky way to implement it but works since there are so few renderers
+    pub fn next(self) -> Self {
+        match self {
+            RendererChoice::SingleThreadRaster => RendererChoice::MultiThreadRaster,
+            RendererChoice::MultiThreadRaster => RendererChoice::Gpu,
+            RendererChoice::Gpu => RendererChoice::SingleThreadRaster,
+        }
+    }
 }
 
 /// The interface that all renderers must implement.
@@ -52,6 +62,9 @@ impl RendererChoice {
 /// The framebuffer is not cleared by any of these methods — the caller is responsible for
 /// pre-filling it (e.g. with a skybox) before invoking the renderer.
 pub trait Renderer {
+    /// Get the renderer choice of this renderer
+    fn renderer_choice(&self) -> RendererChoice;
+
     /// Render all objects into the framebuffer using the given camera and lights.
     fn render_objects(
         &self,

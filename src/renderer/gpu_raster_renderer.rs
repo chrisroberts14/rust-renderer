@@ -2,7 +2,7 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
-use crate::renderer::RenderStats;
+use crate::renderer::{RenderStats, RendererChoice};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -596,6 +596,10 @@ impl GpuRasterRenderer {
 }
 
 impl super::Renderer for GpuRasterRenderer {
+    fn renderer_choice(&self) -> RendererChoice {
+        RendererChoice::Gpu
+    }
+
     fn render_objects(
         &self,
         objects: &[Object],

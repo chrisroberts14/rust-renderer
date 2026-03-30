@@ -165,6 +165,12 @@ impl App {
                     Err("Window not initialized".into())
                 }
             }
+            Action::NextRenderer => {
+                // Move to the next renderer
+                let choice = self.renderer.renderer_choice().next();
+                self.renderer = choice.into_renderer();
+                Ok(())
+            }
         }
     }
 

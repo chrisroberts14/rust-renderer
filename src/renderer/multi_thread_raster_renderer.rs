@@ -1,4 +1,4 @@
-use super::{prepare_render, rasterize_tile};
+use super::{prepare_render, rasterize_tile, RendererChoice};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::{RenderStats, draw_wireframe};
@@ -18,6 +18,10 @@ impl MultiThreadRasterRenderer {
 }
 
 impl super::Renderer for MultiThreadRasterRenderer {
+    fn renderer_choice(&self) -> RendererChoice {
+        RendererChoice::MultiThreadRaster
+    }
+
     fn render_objects(
         &self,
         objects: &[Object],
@@ -61,13 +65,13 @@ impl super::Renderer for MultiThreadRasterRenderer {
         }
     }
 
+    fn increase_tile_count(&mut self, delta: usize) {
+        self.tile_size += delta;
+    }
+
     fn decrease_tile_count(&mut self, delta: usize) {
         if self.tile_size - delta >= 1 {
             self.tile_size -= delta;
         }
-    }
-
-    fn increase_tile_count(&mut self, delta: usize) {
-        self.tile_size += delta;
     }
 }
