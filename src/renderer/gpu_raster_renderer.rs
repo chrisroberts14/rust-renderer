@@ -64,7 +64,6 @@ pub struct GpuRasterRenderer {
 struct GpuFramebuffer {
     colour: wgpu::Texture,
     colour_view: wgpu::TextureView,
-    depth: wgpu::Texture,
     depth_view: wgpu::TextureView,
     readback: wgpu::Buffer,
     width: u32,
@@ -131,7 +130,7 @@ impl GpuRasterRenderer {
 
     /// Returns a reference to the offscreen framebuffer, creating or recreating it if the
     /// dimensions have changed.
-    fn ensure_framebuffer(&self, w: u32, h: u32) -> std::cell::Ref<GpuFramebuffer> {
+    fn ensure_framebuffer(&self, w: u32, h: u32) -> std::cell::Ref<'_, GpuFramebuffer> {
         {
             let mut fb = self.colour_texture.borrow_mut();
             let needs_new = fb.as_ref().map_or(true, |f| f.width != w || f.height != h);
@@ -186,7 +185,6 @@ impl GpuRasterRenderer {
         GpuFramebuffer {
             colour,
             colour_view,
-            depth,
             depth_view,
             readback,
             width: w,
