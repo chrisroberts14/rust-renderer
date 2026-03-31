@@ -44,18 +44,5 @@ fn bench_multi_thread(c: &mut Criterion) {
     group.finish();
 }
 
-#[cfg(target_os = "windows")]
 criterion_group!(benches, bench_multi_thread);
-
-#[cfg(not(target_os = "windows"))]
-use pprof::criterion::{Output, PProfProfiler};
-
-#[cfg(not(target_os = "windows"))]
-criterion_group! {
-    name = benches;
-    config = Criterion::default()
-        .with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
-    targets = bench_multi_thread
-}
-
 criterion_main!(benches);
