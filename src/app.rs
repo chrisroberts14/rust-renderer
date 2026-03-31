@@ -305,12 +305,13 @@ impl ApplicationHandler for App {
                 let now = Instant::now();
                 let elapsed = now.duration_since(self.last_frame_time);
                 self.last_frame_time = now;
-                self.fps_counter.tick(elapsed, &mut self.overlay);
+                self.fps_counter.tick(elapsed);
 
                 if self.scene.settings.show_overlay {
                     for (key, val) in &stats {
                         self.overlay.add(key, val);
                     }
+                    self.overlay.add("fps", &self.fps_counter.fps.to_string());
                 }
 
                 let display = self.display.as_ref().expect("Display not initialized");
