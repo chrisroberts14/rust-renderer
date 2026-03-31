@@ -1,5 +1,6 @@
 use std::iter::Cycle;
 use std::path::PathBuf;
+use std::time::Instant;
 use std::vec::IntoIter;
 
 use winit::application::ApplicationHandler;
@@ -28,6 +29,7 @@ pub struct App {
     display: Option<DisplaySurface<'static>>,
     scene: Scene,
     fps_counter: FpsCounter,
+    last_frame_time: Instant,
     cursor_grabbed: bool,
     fast_move: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
@@ -58,6 +60,7 @@ impl App {
                 display: None,
                 scene,
                 fps_counter: FpsCounter::new(),
+                last_frame_time: Instant::now(),
                 cursor_grabbed: false,
                 fast_move: false,
                 scene_files: None,
@@ -75,6 +78,7 @@ impl App {
                     display: None,
                     scene,
                     fps_counter: FpsCounter::new(),
+                    last_frame_time: Instant::now(),
                     cursor_grabbed: false,
                     fast_move: false,
                     scene_files: Some(scene_files_iter),
@@ -298,7 +302,10 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
                 let stats = self.scene.render_scene(&*self.renderer);
-                self.fps_counter.tick(&mut self.overlay);
+                let now = Instant::now();
+                let elapsed = now.duration_since(self.last_frame_time);
+                self.last_frame_time = now;
+                self.fps_counter.tick(elapsed, &mut self.overlay);
 
                 if self.scene.settings.show_overlay {
                     for (key, val) in &stats {

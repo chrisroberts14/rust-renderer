@@ -27,6 +27,10 @@ impl StatsOverlay {
         }
     }
 
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.stats.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+
     pub fn with_defaults(defaults: Vec<(&str, &str)>) -> Self {
         let mut def = Self::default();
         for (key, val) in defaults {
