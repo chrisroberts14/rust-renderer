@@ -2197,6 +2197,7 @@ dependencies = [
  "clap",
  "criterion",
  "image",
+ "indexmap",
  "pollster",
  "pprof",
  "rayon",

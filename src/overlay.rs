@@ -1,10 +1,10 @@
 use crate::framebuffer::Framebuffer;
 use crate::text::draw_text;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
 pub struct StatsOverlay {
-    stats: HashMap<String, String>,
+    stats: IndexMap<String, String>,
 }
 
 impl StatsOverlay {
