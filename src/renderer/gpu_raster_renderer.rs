@@ -6,7 +6,7 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
-use crate::renderer::{RenderStats, RendererChoice};
+use crate::renderer::RendererChoice;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -568,7 +568,7 @@ impl GpuRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
         wireframe: bool,
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         let (w, h) = (framebuffer.width as u32, framebuffer.height as u32);
         let gpu_fb = self.ensure_framebuffer(w, h);
         let pipeline = if wireframe {
@@ -653,10 +653,14 @@ impl GpuRasterRenderer {
         self.queue.submit([encoder.finish()]);
         *self.last_colour_view.borrow_mut() = Some(colour_view);
 
-        RenderStats {
-            triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
-            tile_count: 0,
-        }
+        vec![(
+            "Triangle Count",
+            objects
+                .iter()
+                .map(|o| o.mesh.faces.len())
+                .sum::<usize>()
+                .to_string(),
+        )]
     }
 }
 
@@ -674,7 +678,7 @@ impl super::Renderer for GpuRasterRenderer {
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
         ambient: f32,
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         self.render_scene(objects, camera, lights, framebuffer, ambient, false)
     }
 
@@ -685,7 +689,7 @@ impl super::Renderer for GpuRasterRenderer {
         objects: &[Object],
         camera: &Camera,
         framebuffer: &Framebuffer,
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         self.render_scene(objects, camera, &[], framebuffer, 1.0, true)
     }
 

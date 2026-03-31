@@ -22,12 +22,6 @@ use wgpu;
 
 const SHININESS: i32 = 32;
 
-#[derive(Debug)]
-pub struct RenderStats {
-    pub triangle_count: usize,
-    pub tile_count: usize,
-}
-
 /// Enum to allow for choosing a given Renderer
 /// Once a renderer is implemented it will need to be "registered" here
 #[derive(Clone, ValueEnum, Display, PartialEq)]
@@ -75,7 +69,7 @@ pub trait Renderer {
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
         ambient: f32,
-    ) -> RenderStats;
+    ) -> Vec<(&'static str, String)>;
 
     /// Render all objects as wireframe outlines.
     ///
@@ -85,7 +79,7 @@ pub trait Renderer {
         objects: &[Object],
         camera: &Camera,
         framebuffer: &Framebuffer,
-    ) -> RenderStats;
+    ) -> Vec<(&'static str, String)>;
 
     /// Increase the number of tiles
     /// Is a no-op if the renderer is not tile based

@@ -3,7 +3,7 @@
 use super::{RendererChoice, prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
-use crate::renderer::{RenderStats, draw_wireframe};
+use crate::renderer::draw_wireframe;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
@@ -30,7 +30,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
         lights: &[Arc<dyn Light>],
         framebuffer: &Framebuffer,
         ambient: f32,
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
         tiles
             .iter()
@@ -46,10 +46,10 @@ impl super::Renderer for SingleThreadRasterRenderer {
                     ambient,
                 );
             });
-        RenderStats {
-            triangle_count: triangles.len(),
-            tile_count: tiles.len(),
-        }
+        vec![
+            ("Triangle Count", triangles.len().to_string()),
+            ("Tile Count", tiles.len().to_string()),
+        ]
     }
 
     fn render_wireframe(
@@ -57,13 +57,10 @@ impl super::Renderer for SingleThreadRasterRenderer {
         objects: &[Object],
         camera: &Camera,
         framebuffer: &Framebuffer,
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         let (triangles, _, _) = prepare_render(objects, camera, framebuffer, self.tile_size);
         draw_wireframe(&triangles, framebuffer);
-        RenderStats {
-            triangle_count: triangles.len(),
-            tile_count: 0,
-        }
+        vec![("Triangle Count", triangles.len().to_string())]
     }
 
     fn increase_tile_count(&mut self, delta: usize) {

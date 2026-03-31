@@ -298,10 +298,9 @@ impl ApplicationHandler for App {
                 self.fps_counter.tick(&mut self.overlay);
 
                 if self.scene.settings.show_overlay {
-                    self.overlay
-                        .add("Triangle Count", &stats.triangle_count.to_string());
-                    self.overlay
-                        .add("Tile Count", &stats.tile_count.to_string());
+                    for (key, val) in &stats {
+                        self.overlay.add(key, val);
+                    }
                 }
 
                 let display = self.display.as_ref().expect("Display not initialized");

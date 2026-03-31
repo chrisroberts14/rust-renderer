@@ -2,7 +2,7 @@ use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
 use crate::geometry::update_thread::{UpdateThread, spawn_update_thread_for};
 use crate::maths::vec3::Vec3;
-use crate::renderer::{RenderStats, Renderer};
+use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -56,7 +56,7 @@ impl Scene {
         renderer: &dyn Renderer,
         objects: &[Object],
         lights: &[Arc<dyn Light>],
-    ) -> RenderStats {
+    ) -> Vec<(&'static str, String)> {
         match self.settings.wire_frame_mode {
             true => renderer.render_wireframe(objects, &self.camera, &self.framebuffer),
             false => renderer.render_objects(
@@ -100,7 +100,7 @@ impl Scene {
     /// Clears the framebuffer then does the following:
     /// 1. Draw the skybox
     /// 2. Render the scene objects (with light source boxes appended, if enabled)
-    pub fn render_scene(&mut self, renderer: &dyn Renderer) -> RenderStats {
+    pub fn render_scene(&mut self, renderer: &dyn Renderer) -> Vec<(&'static str, String)> {
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
