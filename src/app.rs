@@ -175,7 +175,9 @@ impl App {
             }
             Action::NextRenderer => {
                 let choice = self.renderer.renderer_choice().next();
-                self.overlay.add("renderer_type", &format!("{}", choice));
+                // Clear the overlay so only stats from the new renderer are shown
+                self.overlay =
+                    StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", choice))]);
                 self.renderer = if matches!(choice, RendererChoice::Gpu) {
                     if let Some(display) = &self.display {
                         Box::new(GpuRasterRenderer::from_display(display))
@@ -185,6 +187,7 @@ impl App {
                 } else {
                     choice.into_renderer()
                 };
+
                 Ok(())
             }
         }
