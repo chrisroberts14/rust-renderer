@@ -2,18 +2,21 @@ use std::iter::Cycle;
 use std::path::PathBuf;
 use std::vec::IntoIter;
 
-use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{CursorGrabMode, Window, WindowAttributes};
 
+use crate::display::DisplaySurface;
 use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
+use crate::framebuffer::Framebuffer;
 use crate::overlay::StatsOverlay;
 use crate::renderer::Renderer;
+use crate::renderer::RendererChoice;
+use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
 use crate::scenes::scene::Scene;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
@@ -22,7 +25,7 @@ const FAST_SPEED: f32 = 0.25;
 
 pub struct App {
     window: Option<&'static dyn Window>,
-    pixels: Option<Pixels<'static>>,
+    display: Option<DisplaySurface<'static>>,
     scene: Scene,
     fps_counter: FpsCounter,
     cursor_grabbed: bool,
@@ -52,7 +55,7 @@ impl App {
         match scene_option {
             Some(scene) => Ok(Self {
                 window: None,
-                pixels: None,
+                display: None,
                 scene,
                 fps_counter: FpsCounter::new(),
                 cursor_grabbed: false,
@@ -69,7 +72,7 @@ impl App {
 
                 Ok(Self {
                     window: None,
-                    pixels: None,
+                    display: None,
                     scene,
                     fps_counter: FpsCounter::new(),
                     cursor_grabbed: false,
@@ -171,11 +174,17 @@ impl App {
                 }
             }
             Action::NextRenderer => {
-                // Move to the next renderer
                 let choice = self.renderer.renderer_choice().next();
-                // Also write the renderer type to the overlay
                 self.overlay.add("renderer_type", &format!("{}", choice));
-                self.renderer = choice.into_renderer();
+                self.renderer = if matches!(choice, RendererChoice::Gpu) {
+                    if let Some(display) = &self.display {
+                        Box::new(GpuRasterRenderer::from_display(display))
+                    } else {
+                        choice.into_renderer()
+                    }
+                } else {
+                    choice.into_renderer()
+                };
                 Ok(())
             }
         }
@@ -250,15 +259,22 @@ impl ApplicationHandler for App {
 
         let window_size = window_ref.surface_size();
 
-        let surface_texture =
-            SurfaceTexture::new(window_size.width, window_size.height, window_ref);
-        let pixels = PixelsBuilder::new(window_size.width, window_size.height, surface_texture)
-            .present_mode(pixels::wgpu::PresentMode::AutoNoVsync)
-            .build()
-            .expect("Failed to create pixel buffer");
+        let display = DisplaySurface::new(
+            window_ref,
+            window_size.width as usize,
+            window_size.height as usize,
+        );
 
         self.window = Some(window_ref);
-        self.pixels = Some(pixels);
+        self.display = Some(display);
+
+        // If the renderer is GPU, reinitialize it using the shared device from the display so that
+        // GPU textures can be blitted directly to the surface without a CPU readback.
+        if self.renderer.renderer_choice() == RendererChoice::Gpu {
+            self.renderer = Box::new(GpuRasterRenderer::from_display(
+                self.display.as_ref().unwrap(),
+            ));
+        }
 
         self.lock_mouse().expect("Failed to lock mouse on resume");
 
@@ -282,21 +298,30 @@ impl ApplicationHandler for App {
                 self.fps_counter.tick(&mut self.overlay);
 
                 if self.scene.settings.show_overlay {
-                    // Write the render stats to the overlay
                     self.overlay
                         .add("Triangle Count", &stats.triangle_count.to_string());
                     self.overlay
                         .add("Tile Count", &stats.tile_count.to_string());
-                    self.overlay
-                        .write_to_framebuffer(&mut self.scene.framebuffer);
                 }
 
-                // Copy the newly generated frame into the pixel array which is what will be put on the screen
-                let pixels = self.pixels.as_mut().expect("Pixels not initialized");
-                pixels
-                    .frame_mut()
-                    .copy_from_slice(self.scene.framebuffer.as_bytes());
-                pixels.render().expect("Failed to render frame");
+                let display = self.display.as_ref().expect("Display not initialized");
+                if let Some(view) = self.renderer.take_gpu_view() {
+                    let overlay = self.scene.settings.show_overlay.then(|| {
+                        let mut fb = Framebuffer::new(
+                            self.scene.framebuffer.width,
+                            self.scene.framebuffer.height,
+                        );
+                        self.overlay.write_to_framebuffer(&mut fb);
+                        fb
+                    });
+                    display.present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
+                } else {
+                    if self.scene.settings.show_overlay {
+                        self.overlay
+                            .write_to_framebuffer(&mut self.scene.framebuffer);
+                    }
+                    display.present_cpu_frame(self.scene.framebuffer.as_bytes());
+                }
 
                 // Render the next frame
                 self.window
@@ -305,13 +330,10 @@ impl ApplicationHandler for App {
                     .request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
-                let pixels = self.pixels.as_mut().expect("Pixels not initialized");
-                if let Err(e) = pixels.resize_surface(new_size.width, new_size.height) {
-                    eprintln!("Failed to resize surface: {:?}", e);
-                }
-                if let Err(e) = pixels.resize_buffer(new_size.width, new_size.height) {
-                    eprintln!("Failed to resize buffer: {:?}", e);
-                }
+                self.display
+                    .as_mut()
+                    .expect("Display not initialized")
+                    .resize(new_size.width, new_size.height);
                 self.scene
                     .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);

@@ -18,6 +18,7 @@ use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
 use strum_macros::Display;
+use wgpu;
 
 const SHININESS: i32 = 32;
 
@@ -29,7 +30,7 @@ pub struct RenderStats {
 
 /// Enum to allow for choosing a given Renderer
 /// Once a renderer is implemented it will need to be "registered" here
-#[derive(Clone, ValueEnum, Display)]
+#[derive(Clone, ValueEnum, Display, PartialEq)]
 pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
@@ -95,6 +96,12 @@ pub trait Renderer {
     /// Is a no-op if the renderer is not tile based
     #[allow(unused_variables)]
     fn decrease_tile_count(&mut self, delta: usize) {}
+
+    /// Returns the GPU colour texture view produced by the most recent render call, if any.
+    /// Only implemented by the GPU renderer; CPU renderers return `None`.
+    fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
+        None
+    }
 }
 
 /// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile

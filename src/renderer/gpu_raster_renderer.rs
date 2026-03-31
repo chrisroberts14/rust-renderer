@@ -1,6 +1,7 @@
 /// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
 /// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
 ///
+use crate::display::DisplaySurface;
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
@@ -55,20 +56,20 @@ struct GpuLightBlock {
 }
 
 pub struct GpuRasterRenderer {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     // RefCell needed because render_objects takes &self but we lazily initialise/resize this
     colour_texture: RefCell<Option<GpuFramebuffer>>,
+    last_colour_view: RefCell<Option<wgpu::TextureView>>,
 }
 
 struct GpuFramebuffer {
     colour: wgpu::Texture,
     colour_view: wgpu::TextureView,
     depth_view: wgpu::TextureView,
-    readback: wgpu::Buffer,
     width: u32,
     height: u32,
 }
@@ -93,11 +94,6 @@ fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
             [0.0, 0.0, -1.0, 0.0],
         ],
     }
-}
-
-/// Rounds `n` up to the next multiple of 256, as required by wgpu's texture copy alignment rules.
-fn align_to_256(n: u32) -> u32 {
-    (n + 255) & !255
 }
 
 impl Default for GpuRasterRenderer {
@@ -132,6 +128,9 @@ impl GpuRasterRenderer {
             .await
             .expect("Failed to get device");
 
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
+
         let bind_group_layout = Self::create_bind_group_layout(&device);
         let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
         let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
@@ -143,6 +142,28 @@ impl GpuRasterRenderer {
             wireframe_pipeline,
             bind_group_layout,
             colour_texture: RefCell::new(None),
+            last_colour_view: RefCell::new(None),
+        }
+    }
+
+    /// Creates a renderer that shares the wgpu device and queue with the given display surface.
+    /// This allows the GPU renderer to blit its output directly to the surface without a CPU readback.
+    pub fn from_display(display: &DisplaySurface<'_>) -> Self {
+        let device = display.shared_device();
+        let queue = display.shared_queue();
+
+        let bind_group_layout = Self::create_bind_group_layout(&device);
+        let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
+        let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
+
+        Self {
+            device,
+            queue,
+            pipeline,
+            wireframe_pipeline,
+            bind_group_layout,
+            colour_texture: RefCell::new(None),
+            last_colour_view: RefCell::new(None),
         }
     }
 
@@ -159,8 +180,7 @@ impl GpuRasterRenderer {
         std::cell::Ref::map(self.colour_texture.borrow(), |f| f.as_ref().unwrap())
     }
 
-    /// Allocates the offscreen colour texture, depth texture, and CPU-readable readback buffer
-    /// for a framebuffer of the given dimensions.
+    /// Allocates the offscreen colour texture and depth texture for a framebuffer of the given dimensions.
     fn create_gpu_framebuffer(device: &wgpu::Device, w: u32, h: u32) -> GpuFramebuffer {
         let colour = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen_colour"),
@@ -174,7 +194,7 @@ impl GpuRasterRenderer {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -196,19 +216,10 @@ impl GpuRasterRenderer {
         });
         let depth_view = depth.create_view(&Default::default());
 
-        let bytes_per_row = align_to_256(w * 4);
-        let readback = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("readback_buf"),
-            size: (bytes_per_row * h) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
         GpuFramebuffer {
             colour,
             colour_view,
             depth_view,
-            readback,
             width: w,
             height: h,
         }
@@ -547,67 +558,6 @@ impl GpuRasterRenderer {
         })
     }
 
-    /// Submits the encoder, waits for the GPU to finish, then copies the readback buffer into
-    /// the CPU framebuffer pixel-by-pixel.
-    fn readback_to_framebuffer(
-        &self,
-        mut encoder: wgpu::CommandEncoder,
-        gpu_fb: &GpuFramebuffer,
-        framebuffer: &Framebuffer,
-    ) {
-        let (w, h) = (gpu_fb.width, gpu_fb.height);
-        let bytes_per_row = align_to_256(w * 4);
-
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &gpu_fb.colour,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &gpu_fb.readback,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bytes_per_row),
-                    rows_per_image: Some(h),
-                },
-            },
-            wgpu::Extent3d {
-                width: w,
-                height: h,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        let submission_index = self.queue.submit([encoder.finish()]);
-        let (tx, rx) = std::sync::mpsc::channel();
-        gpu_fb
-            .readback
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission_index),
-                timeout: None,
-            })
-            .expect("GPU poll failed");
-        rx.recv().unwrap().unwrap();
-
-        {
-            let mapped = gpu_fb.readback.slice(..).get_mapped_range();
-            for y in 0..h as usize {
-                let row_start = y * bytes_per_row as usize;
-                let src = &mapped[row_start..row_start + w as usize * 4];
-                for x in 0..w as usize {
-                    let b = x * 4;
-                    framebuffer.set_pixel(x, y, [src[b], src[b + 1], src[b + 2], src[b + 3]]);
-                }
-            }
-        }
-        gpu_fb.readback.unmap();
-    }
-
     /// Internal render method shared by `render_objects` and `render_wireframe`.
     /// When `wireframe` is true the wireframe pipeline is used and lights are ignored.
     fn render_scene(
@@ -696,7 +646,13 @@ impl GpuRasterRenderer {
             }
         }
 
-        self.readback_to_framebuffer(encoder, &gpu_fb, framebuffer);
+        // Create the view before dropping the Ref borrow on gpu_fb
+        let colour_view = gpu_fb.colour.create_view(&Default::default());
+        drop(gpu_fb);
+
+        self.queue.submit([encoder.finish()]);
+        *self.last_colour_view.borrow_mut() = Some(colour_view);
+
         RenderStats {
             triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
             tile_count: 0,
@@ -731,5 +687,9 @@ impl super::Renderer for GpuRasterRenderer {
         framebuffer: &Framebuffer,
     ) -> RenderStats {
         self.render_scene(objects, camera, &[], framebuffer, 1.0, true)
+    }
+
+    fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
+        self.last_colour_view.borrow_mut().take()
     }
 }

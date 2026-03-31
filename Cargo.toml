@@ -7,7 +7,6 @@ edition = "2024"
 bytemuck = { version = "1.22", features = ["derive"] }
 clap = { version = "4.6.0", features = ["derive"] }
 image = { version = "0.25.10", features = ["exr"] }
-pixels = "0.15.0"
 pollster = "0.4.0"
 rayon = "1.11.0"
 schemars = "1.2.1"
