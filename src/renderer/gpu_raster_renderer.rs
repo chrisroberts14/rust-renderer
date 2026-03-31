@@ -1,3 +1,6 @@
+/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
+/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
+///
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
@@ -10,9 +13,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
-/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
-
+/// There needs to be a maximum number of lights as we need fixed size arrays
 const MAX_LIGHTS: usize = 8;
 
 #[repr(C)]
@@ -99,6 +100,12 @@ fn align_to_256(n: u32) -> u32 {
     (n + 255) & !255
 }
 
+impl Default for GpuRasterRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GpuRasterRenderer {
     /// Creates the renderer, blocking the calling thread until the wgpu device is ready.
     pub fn new() -> Self {
@@ -144,7 +151,7 @@ impl GpuRasterRenderer {
     fn ensure_framebuffer(&self, w: u32, h: u32) -> std::cell::Ref<'_, GpuFramebuffer> {
         {
             let mut fb = self.colour_texture.borrow_mut();
-            let needs_new = fb.as_ref().map_or(true, |f| f.width != w || f.height != h);
+            let needs_new = fb.as_ref().is_none_or(|f| f.width != w || f.height != h);
             if needs_new {
                 *fb = Some(Self::create_gpu_framebuffer(&self.device, w, h));
             }
@@ -689,7 +696,7 @@ impl GpuRasterRenderer {
             }
         }
 
-        self.readback_to_framebuffer(encoder, &*gpu_fb, framebuffer);
+        self.readback_to_framebuffer(encoder, &gpu_fb, framebuffer);
         RenderStats {
             triangle_count: objects.iter().map(|o| o.mesh.faces.len()).sum(),
             tile_count: 0,

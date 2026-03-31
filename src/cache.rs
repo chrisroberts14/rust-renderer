@@ -73,12 +73,12 @@ impl<K: Eq + Hash + Clone, V: Clone> LruCache<K, V> {
         self.push_front(node.clone());
         self.map.insert(key, node);
 
-        if self.map.len() > self.capacity {
-            if let Some(old_tail) = self.tail.clone() {
-                let key = old_tail.lock().unwrap().key.clone();
-                self.remove(old_tail);
-                self.map.remove(&key);
-            }
+        if self.map.len() > self.capacity
+            && let Some(old_tail) = self.tail.clone()
+        {
+            let key = old_tail.lock().unwrap().key.clone();
+            self.remove(old_tail);
+            self.map.remove(&key);
         }
     }
 
@@ -134,18 +134,20 @@ impl<K: Eq + Hash + Clone, V: Clone> LruCache<K, V> {
 #[macro_export]
 macro_rules! cached {
     (
-        $vis:vis fn $name:ident($arg:ident : $key_ty:ty) -> Result<$ok:ty, $err:ty> = $cap:expr => $body:block
+        $vis:vis fn $name:ident($($arg:ident : $arg_ty:ty),+) -> Result<$ok:ty, $err:ty> = $cap:expr => $body:block
     ) => {
-        $vis fn $name($arg: $key_ty) -> Result<$ok, $err> {
+        $vis fn $name($($arg: $arg_ty),+) -> Result<$ok, $err> {
             use std::sync::{Mutex, OnceLock};
 
-            static CACHE: OnceLock<Mutex<$crate::LruCache<$key_ty, $ok>>> = OnceLock::new();
+            type CacheKey = ($($arg_ty,)+);
+            static CACHE: OnceLock<Mutex<$crate::LruCache<CacheKey, $ok>>> = OnceLock::new();
 
             let cache = CACHE.get_or_init(|| Mutex::new($crate::LruCache::new($cap)));
+            let key: CacheKey = ($($arg.clone(),)+);
 
             {
                 let mut cache_guard = cache.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(v) = cache_guard.get(&$arg) {
+                if let Some(v) = cache_guard.get(&key) {
                     return Ok(v);
                 }
             } // lock released here
@@ -154,7 +156,7 @@ macro_rules! cached {
 
             if let Ok(ref value) = result {
                 let mut cache_guard = cache.lock().unwrap_or_else(|e| e.into_inner());
-                cache_guard.insert($arg.clone(), value.clone());
+                cache_guard.insert(key, value.clone());
             }
 
             result
