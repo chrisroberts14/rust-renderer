@@ -1,5 +1,5 @@
 use crate::overlay::StatsOverlay;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct FpsCounter {
     last_time: Instant,
@@ -31,7 +31,7 @@ impl FpsCounter {
         if elapsed.as_secs_f32() >= 1.0 {
             self.fps = self.frame_count;
             self.frame_count = 0;
-            self.last_time = now;
+            self.last_time += Duration::from_secs(1);
         }
         overlay.add("FPS", &self.fps.to_string());
     }
