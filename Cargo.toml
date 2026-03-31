@@ -18,10 +18,10 @@ wgpu = "29.0.1"
 winit = "0.31.0-beta.2"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8.2"
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
-pprof = { version = "0.13", features = ["flamegraph", "criterion"] }
+pprof = { version = "0.15", features = ["flamegraph", "criterion"] }
 
 [[bench]]
 name = "single_thread_bench"
@@ -29,4 +29,8 @@ harness = false
 
 [[bench]]
 name = "multi_thread_bench"
+harness = false
+
+[[bench]]
+name = "gpu_bench"
 harness = false
