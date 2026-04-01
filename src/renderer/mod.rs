@@ -462,7 +462,7 @@ pub(super) fn rasterize_tile(
                                 tex.sample(uv.x, uv.y)
                             }
                         };
-                        let (r, g, b) = (cr as f32, cg as f32, cb as f32);
+                        let (r, g, b) = (f32::from(cr), f32::from(cg), f32::from(cb));
 
                         framebuffer.set_pixel(
                             ux,

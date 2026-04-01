@@ -57,15 +57,16 @@ impl Scene {
         objects: &[Object],
         lights: &[Arc<dyn Light>],
     ) -> Vec<(&'static str, String)> {
-        match self.settings.wire_frame_mode {
-            true => renderer.render_wireframe(objects, &self.camera, &self.framebuffer),
-            false => renderer.render_objects(
+        if self.settings.wire_frame_mode {
+            renderer.render_wireframe(objects, &self.camera, &self.framebuffer)
+        } else {
+            renderer.render_objects(
                 objects,
                 &self.camera,
                 lights,
                 &self.framebuffer,
                 self.ambient,
-            ),
+            )
         }
     }
 
