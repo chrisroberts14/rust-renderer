@@ -322,11 +322,7 @@ impl GpuRasterRenderer {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Cw,
-                cull_mode: if wireframe {
-                    None
-                } else {
-                    Some(wgpu::Face::Back)
-                },
+                cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: if wireframe {
                     wgpu::PolygonMode::Line
                 } else {
