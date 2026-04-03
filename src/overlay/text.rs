@@ -1,8 +1,11 @@
+//! Custom text rendering code
+//! TODO: This should probably replaced with a proper text rendering library at some point
+
 use crate::framebuffer::Framebuffer;
 
 /// Bitmaps for all numbers and english characters
 /// We could also use something like fontdue and store a ttf file in the repo
-pub fn char_bitmap(ch: char) -> [u8; 5] {
+fn char_bitmap(ch: char) -> [u8; 5] {
     match ch.to_ascii_uppercase() {
         '0' => [0b111, 0b101, 0b101, 0b101, 0b111],
         '1' => [0b010, 0b110, 0b010, 0b010, 0b111],
@@ -48,12 +51,12 @@ pub fn char_bitmap(ch: char) -> [u8; 5] {
 }
 
 /// Function to draw arbitrary text to the screen
-pub fn draw_text(
+pub(crate) fn draw_text(
     framebuffer: &mut Framebuffer,
     text: &str,
     x: usize,
     y: usize,
-    color: [u8; 4],
+    colour: [u8; 4],
     scale: usize,
 ) {
     for (i, ch) in text.chars().enumerate() {
@@ -66,7 +69,7 @@ pub fn draw_text(
                             framebuffer.set_pixel(
                                 x + i * 4 * scale + col * scale + sx,
                                 y + row * scale + sy,
-                                color,
+                                colour,
                             );
                         }
                     }

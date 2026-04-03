@@ -1,5 +1,5 @@
+use super::text::draw_text;
 use crate::framebuffer::Framebuffer;
-use crate::text::draw_text;
 use indexmap::IndexMap;
 
 #[derive(Debug, Default)]

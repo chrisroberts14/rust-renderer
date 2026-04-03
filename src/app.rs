@@ -14,7 +14,7 @@ use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
 use crate::framebuffer::Framebuffer;
-use crate::overlay::StatsOverlay;
+use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::Renderer;
 use crate::renderer::RendererChoice;
 use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
