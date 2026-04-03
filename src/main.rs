@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -17,6 +19,10 @@ struct Args {
     /// Height of the window to create
     #[arg(long, default_value_t = 600.0)]
     height: f32,
+
+    /// Path to the scene file to load
+    #[arg(long)]
+    scene: Option<PathBuf>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,7 +32,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let app = App::new(None, renderer, args.width, args.height)?;
+    let scene = if let Some(scene_path) = args.scene {
+        Some(rust_renderer::file::scene_file::SceneFile::from_file(
+            scene_path,
+            args.width,
+            args.height,
+        )?)
+    } else {
+        None
+    };
+
+    let app = App::new(scene, renderer, args.width, args.height)?;
 
     event_loop.run_app(app)?;
 
