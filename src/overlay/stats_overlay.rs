@@ -34,4 +34,9 @@ impl StatsOverlay {
         }
         def
     }
+
+    #[cfg(test)]
+    pub(crate) fn get_stat(&self, key: &str) -> Option<&String> {
+        self.stats.get(key)
+    }
 }

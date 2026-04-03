@@ -25,3 +25,38 @@ impl OverlayManager {
         self.stats_overlay.add(key, value);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_new_stat() {
+        let mut overlay_manager = OverlayManager::new(StatsOverlay::default());
+        overlay_manager.add_stat("FPS", "60");
+        assert_eq!(
+            overlay_manager.stats_overlay.get_stat("FPS"),
+            Some(&"60".to_string())
+        );
+    }
+
+    #[test]
+    fn test_create_new_overlay_manager() {
+        let stats_manager = StatsOverlay::with_defaults(vec![("test_stat", "10")]);
+        let overlay_manager = OverlayManager::new(stats_manager);
+        assert_eq!(
+            overlay_manager.stats_overlay.get_stat("test_stat"),
+            Some(&"10".to_string())
+        );
+    }
+
+    #[test]
+    fn test_create_new_stats_overlay() {
+        let mut overlay_manager = OverlayManager::new(StatsOverlay::default());
+        overlay_manager.create_new_stats_overlay(vec![("new_stat", "20")]);
+        assert_eq!(
+            overlay_manager.stats_overlay.get_stat("new_stat"),
+            Some(&"20".to_string())
+        );
+    }
+}
