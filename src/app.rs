@@ -14,6 +14,7 @@ use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
 use crate::fps::FpsCounter;
 use crate::framebuffer::Framebuffer;
+use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::Renderer;
 use crate::renderer::RendererChoice;
@@ -34,7 +35,7 @@ pub struct App {
     fast_move: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
-    overlay: StatsOverlay,
+    overlays: OverlayManager,
     key_bindings: KeyBindings,
 }
 
@@ -51,7 +52,7 @@ impl App {
         let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
 
         let renderer_choice = renderer.renderer_choice();
-        let overlay =
+        let stats_overlay =
             StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer_choice))]);
 
         match scene_option {
@@ -65,7 +66,7 @@ impl App {
                 fast_move: false,
                 scene_files: None,
                 renderer,
-                overlay,
+                overlays: OverlayManager::new(stats_overlay),
                 key_bindings,
             }),
             _ => {
@@ -83,7 +84,7 @@ impl App {
                     fast_move: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
-                    overlay,
+                    overlays: OverlayManager::new(stats_overlay),
                     key_bindings,
                 })
             }
@@ -180,8 +181,8 @@ impl App {
             Action::NextRenderer => {
                 let choice = self.renderer.renderer_choice().next();
                 // Clear the overlay so only stats from the new renderer are shown
-                self.overlay =
-                    StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", choice))]);
+                self.overlays
+                    .create_new_stats_overlay(vec![("renderer_type", &format!("{}", choice))]);
                 self.renderer = if matches!(choice, RendererChoice::Gpu) {
                     if let Some(display) = &self.display {
                         Box::new(GpuRasterRenderer::from_display(display))
@@ -309,9 +310,10 @@ impl ApplicationHandler for App {
 
                 if self.scene.settings.show_overlay {
                     for (key, val) in &stats {
-                        self.overlay.add(key, val);
+                        self.overlays.add_stat(key, val);
                     }
-                    self.overlay.add("fps", &self.fps_counter.fps.to_string());
+                    self.overlays
+                        .add_stat("fps", &self.fps_counter.fps.to_string());
                 }
 
                 let display = self.display.as_ref().expect("Display not initialized");
@@ -321,13 +323,13 @@ impl ApplicationHandler for App {
                             self.scene.framebuffer.width,
                             self.scene.framebuffer.height,
                         );
-                        self.overlay.write_to_framebuffer(&mut fb);
+                        self.overlays.write_to_framebuffer(&mut fb);
                         fb
                     });
                     display.present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
                 } else {
                     if self.scene.settings.show_overlay {
-                        self.overlay
+                        self.overlays
                             .write_to_framebuffer(&mut self.scene.framebuffer);
                     }
                     display.present_cpu_frame(self.scene.framebuffer.as_bytes());
