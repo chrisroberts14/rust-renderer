@@ -1,7 +1,13 @@
 //! A simple FPS counter that tracks the number of frames rendered in the last second.
+//! [`FpsCounter`] exposes an `fps` field which can be read to get the most recently calculated FPS value and
+//! a `tick` method which should be called once per frame, passing in the time elapsed since the last call.
+//! The `fps` field is only updated once per second, so it can potentially be stale for up to a second.
 
 use std::time::Duration;
 
+/// A simple FPS counter that tracks the number of frames rendered in the last second.
+/// Call the `tick` method once per frame, passing in the time elapsed since the last call, to update the counter.
+/// The `fps` field will be updated approximately once per second with the number of frames rendered in that period.
 pub struct FpsCounter {
     // The total time accumulated since the last FPS update
     accumulated: Duration,
@@ -59,8 +65,8 @@ mod tests {
     #[test]
     fn accumulator_does_not_drift_over_multiple_seconds() {
         let mut counter = FpsCounter::new();
-        // 300 frames at 10ms = 3 full seconds; remainder should be zero
-        for _ in 0..300 {
+        // 3000 frames at 10ms = 30 full seconds; remainder should be zero
+        for _ in 0..3000 {
             counter.tick(Duration::from_millis(10));
         }
         assert_eq!(counter.accumulated, Duration::ZERO);
