@@ -1,5 +1,6 @@
 use std::iter::Cycle;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 use std::vec::IntoIter;
 
@@ -7,7 +8,7 @@ use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{CursorGrabMode, Window, WindowAttributes};
+use winit::window::{Window, WindowAttributes};
 
 use crate::display::DisplaySurface;
 use crate::file::key_bindings_file::{Action, KeyBindings};
@@ -26,7 +27,6 @@ const NORMAL_SPEED: f32 = 0.05;
 const FAST_SPEED: f32 = 0.25;
 
 pub struct App {
-    window: Option<&'static dyn Window>,
     display: Option<DisplaySurface<'static>>,
     scene: Scene,
     fps_counter: FpsCounter,
@@ -57,7 +57,6 @@ impl App {
 
         match scene_option {
             Some(scene) => Ok(Self {
-                window: None,
                 display: None,
                 scene,
                 fps_counter: FpsCounter::new(),
@@ -75,7 +74,6 @@ impl App {
                 let scene = SceneFile::from_file(next_scene, width, height)?;
 
                 Ok(Self {
-                    window: None,
                     display: None,
                     scene,
                     fps_counter: FpsCounter::new(),
@@ -169,14 +167,9 @@ impl App {
                 Ok(())
             }
             Action::ReleaseMouse => {
-                if let Some(window) = self.window {
-                    window.set_cursor_visible(true);
-                    window.set_cursor_grab(CursorGrabMode::None)?;
-                    self.cursor_grabbed = false;
-                    Ok(())
-                } else {
-                    Err("Window not initialized".into())
-                }
+                self.display.as_ref().unwrap().release_mouse()?;
+                self.cursor_grabbed = false;
+                Ok(())
             }
             Action::NextRenderer => {
                 let choice = self.renderer.renderer_choice().next();
@@ -227,13 +220,8 @@ impl App {
     /// With some window managers we have to use Locked and for others (like Wayland) we have to
     /// use Confined, so we try Locked first and fall back to Confined
     fn lock_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = self.window {
-            window.set_cursor_visible(false);
-            if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-                window.set_cursor_grab(CursorGrabMode::Confined)?;
-            }
-            self.cursor_grabbed = true;
-        }
+        self.display.as_ref().unwrap().capture_mouse()?;
+        self.cursor_grabbed = true;
         Ok(())
     }
 }
@@ -258,22 +246,19 @@ impl ApplicationHandler for App {
                 height: self.scene.framebuffer.height as f32,
             });
 
-        let window = event_loop
+        let window: Arc<dyn Window> = event_loop
             .create_window(attrs)
-            .expect("Failed to create window");
+            .expect("Failed to create window")
+            .into();
 
-        // Leak the window to get a static reference
-        let window_ref: &'static dyn Window = Box::leak(window);
-
-        let window_size = window_ref.surface_size();
+        let window_size = window.surface_size();
 
         let display = DisplaySurface::new(
-            window_ref,
+            window,
             window_size.width as usize,
             window_size.height as usize,
         );
 
-        self.window = Some(window_ref);
         self.display = Some(display);
 
         // If the renderer is GPU, reinitialize it using the shared device from the display so that
@@ -286,7 +271,11 @@ impl ApplicationHandler for App {
 
         self.lock_mouse().expect("Failed to lock mouse on resume");
 
-        window_ref.request_redraw();
+        // Request the first frame to be drawn
+        self.display
+            .as_ref()
+            .expect("Display not initialized")
+            .request_redraw();
     }
 
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
@@ -336,9 +325,9 @@ impl ApplicationHandler for App {
                 }
 
                 // Render the next frame
-                self.window
+                self.display
                     .as_ref()
-                    .expect("Window failed to initialise")
+                    .expect("Display not initialized")
                     .request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {

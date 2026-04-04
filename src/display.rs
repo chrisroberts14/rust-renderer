@@ -19,9 +19,11 @@
 //! directly to the screen without any implicit gamma encoding.
 
 use std::sync::Arc;
-use winit::window::Window;
+use winit::window::{CursorGrabMode, Window};
 
 pub struct DisplaySurface<'window> {
+    /// The window is managed here which ensures it lives at least as long as the surface
+    window: Option<Arc<dyn Window>>,
     /// The wgpu instance used to create the surface and adapter.
     pub instance: wgpu::Instance,
     /// The wgpu surface backed by the winit window.
@@ -50,14 +52,14 @@ pub struct DisplaySurface<'window> {
 impl<'window> DisplaySurface<'window> {
     /// Creates a `DisplaySurface` for the given window, blocking until the wgpu adapter and device
     /// are ready. `width` and `height` are the initial surface dimensions in physical pixels.
-    pub fn new(window: &'window dyn Window, width: usize, height: usize) -> Self {
+    pub fn new(window: Arc<dyn Window>, width: usize, height: usize) -> Self {
         pollster::block_on(Self::init_async(window, width, height))
     }
 
-    async fn init_async(window: &'window dyn Window, width: usize, height: usize) -> Self {
+    async fn init_async(window: Arc<dyn Window>, width: usize, height: usize) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance
-            .create_surface(window)
+            .create_surface(window.clone())
             .expect("Failed to create surface");
 
         let adapter = instance
@@ -197,6 +199,7 @@ impl<'window> DisplaySurface<'window> {
         );
 
         Self {
+            window: Some(window),
             cpu_texture: Self::create_cpu_texture(&device, width as u32, height as u32),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Nearest,
@@ -335,5 +338,31 @@ impl<'window> DisplaySurface<'window> {
                 depth_or_array_layers: 1,
             },
         );
+    }
+
+    pub fn release_mouse(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(window) = &self.window {
+            window.set_cursor_visible(true);
+            window.set_cursor_grab(CursorGrabMode::None)?;
+            Ok(())
+        } else {
+            Err("Window not initialized".into())
+        }
+    }
+
+    pub fn capture_mouse(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(window) = &self.window {
+            window.set_cursor_visible(false);
+            window.set_cursor_grab(CursorGrabMode::Confined)?;
+            Ok(())
+        } else {
+            Err("Window not initialized".into())
+        }
+    }
+
+    pub fn request_redraw(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
     }
 }
