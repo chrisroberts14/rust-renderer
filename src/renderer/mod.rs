@@ -1,6 +1,7 @@
 pub mod gpu_raster_renderer;
 pub mod multi_thread_raster_renderer;
 pub mod single_thread_raster_renderer;
+pub mod tile;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
@@ -11,10 +12,10 @@ use crate::maths::vec3::Vec3;
 use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
 use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
 use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
+use crate::renderer::tile::{Tile, make_tiles};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
-use crate::tile::{Tile, make_tiles};
 use clap::ValueEnum;
 use std::sync::Arc;
 use strum_macros::Display;
