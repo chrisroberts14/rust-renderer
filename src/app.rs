@@ -280,6 +280,9 @@ impl ApplicationHandler for App {
                     for (key, val) in &stats {
                         self.overlays.add_stat(key, val);
                     }
+                    for (key, val) in self.scene.settings.as_pairs() {
+                        self.overlays.add_stat(&key, &val);
+                    }
                 }
 
                 let display = self.display.as_ref().expect("Display not initialized");

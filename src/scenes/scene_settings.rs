@@ -21,6 +21,17 @@ impl SceneSettings {
     pub(crate) fn toggle_overlay(&mut self) {
         self.show_overlay = !self.show_overlay;
     }
+
+    /// Return scene settings as string pairs
+    pub(crate) fn as_pairs(&self) -> Vec<(String, String)> {
+        vec![
+            ("render_lights".to_string(), self.render_lights.to_string()),
+            (
+                "wire_frame_mode".to_string(),
+                self.wire_frame_mode.to_string(),
+            ),
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -52,5 +63,22 @@ mod tests {
         assert!(settings.show_overlay);
         settings.toggle_overlay();
         assert!(!settings.show_overlay);
+    }
+
+    #[test]
+    fn test_as_pairs() {
+        let mut settings = SceneSettings::default();
+        settings.render_lights = true;
+        settings.wire_frame_mode = true;
+        let pairs = settings.as_pairs();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(
+            pairs.get(0),
+            Some(&("render_lights".to_string(), "true".to_string()))
+        );
+        assert_eq!(
+            pairs.get(1),
+            Some(&("wire_frame_mode".to_string(), "true".to_string()))
+        );
     }
 }
