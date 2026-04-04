@@ -31,7 +31,6 @@ pub struct App {
     scene: Scene,
     fps_counter: FpsCounter,
     last_frame_time: Instant,
-    cursor_grabbed: bool,
     fast_move: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
@@ -61,7 +60,6 @@ impl App {
                 scene,
                 fps_counter: FpsCounter::new(),
                 last_frame_time: Instant::now(),
-                cursor_grabbed: false,
                 fast_move: false,
                 scene_files: None,
                 renderer,
@@ -78,7 +76,6 @@ impl App {
                     scene,
                     fps_counter: FpsCounter::new(),
                     last_frame_time: Instant::now(),
-                    cursor_grabbed: false,
                     fast_move: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
@@ -167,8 +164,7 @@ impl App {
                 Ok(())
             }
             Action::ReleaseMouse => {
-                self.display.as_ref().unwrap().release_mouse()?;
-                self.cursor_grabbed = false;
+                self.display.as_mut().unwrap().release_mouse()?;
                 Ok(())
             }
             Action::NextRenderer => {
@@ -215,13 +211,6 @@ impl App {
             _ => Ok(()),
         }
     }
-
-    /// Lock the mouse to the window and hide the cursor
-    fn lock_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.display.as_ref().unwrap().capture_mouse()?;
-        self.cursor_grabbed = true;
-        Ok(())
-    }
 }
 
 /// Map a winit `NamedKey` to the lowercase string used in the keybindings file
@@ -267,7 +256,11 @@ impl ApplicationHandler for App {
             ));
         }
 
-        self.lock_mouse().expect("Failed to lock mouse on resume");
+        self.display
+            .as_mut()
+            .unwrap()
+            .capture_mouse()
+            .expect("Failed to capture mouse");
 
         // Request the first frame to be drawn
         self.display
@@ -350,22 +343,19 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::Focused(gained_focus) => {
-                if gained_focus {
-                    if let Err(error) = self.lock_mouse() {
-                        eprintln!("Error locking the mouse: {:?}", error);
-                    }
-                } else {
-                    self.cursor_grabbed = false;
+                if gained_focus && let Err(error) = self.display.as_mut().unwrap().capture_mouse() {
+                    eprintln!("Error locking the mouse: {:?}", error);
                 }
             }
             WindowEvent::PointerButton {
                 state: ElementState::Pressed,
                 ..
-            } if !self.cursor_grabbed => {
-                if let Err(error) = self.lock_mouse() {
-                    eprintln!("Error locking the mouse: {:?}", error);
-                }
-            }
+            } => self
+                .display
+                .as_mut()
+                .unwrap()
+                .capture_mouse()
+                .expect("Failed to capture mouse"),
             _ => (),
         }
     }
@@ -377,7 +367,7 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
-            && self.cursor_grabbed
+            && self.display.as_ref().unwrap().is_cursor_grabbed()
         {
             self.scene.camera.process_mouse(dx as f32, dy as f32);
         }

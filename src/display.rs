@@ -19,11 +19,57 @@
 //! directly to the screen without any implicit gamma encoding.
 
 use std::sync::Arc;
-use winit::window::{CursorGrabMode, Window};
+use winit::window::CursorGrabMode;
+
+struct Window {
+    window: Option<Arc<dyn winit::window::Window>>,
+    cursor_grabbed: bool,
+}
+
+impl Window {
+    fn new(window: Arc<dyn winit::window::Window>) -> Self {
+        Self {
+            window: Some(window),
+            cursor_grabbed: false,
+        }
+    }
+
+    fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(window) = &self.window {
+            window.set_cursor_visible(false);
+            window.set_cursor_grab(CursorGrabMode::Confined)?;
+            self.cursor_grabbed = true;
+            Ok(())
+        } else {
+            Err("Window not initialized".into())
+        }
+    }
+
+    fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(window) = &self.window {
+            window.set_cursor_visible(true);
+            window.set_cursor_grab(CursorGrabMode::None)?;
+            self.cursor_grabbed = false;
+            Ok(())
+        } else {
+            Err("Window not initialized".into())
+        }
+    }
+
+    fn request_redraw(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    fn is_cursor_grabbed(&self) -> bool {
+        self.cursor_grabbed
+    }
+}
 
 pub struct DisplaySurface<'window> {
     /// The window is managed here which ensures it lives at least as long as the surface
-    window: Option<Arc<dyn Window>>,
+    window: Option<Window>,
     /// The wgpu instance used to create the surface and adapter.
     pub instance: wgpu::Instance,
     /// The wgpu surface backed by the winit window.
@@ -52,11 +98,15 @@ pub struct DisplaySurface<'window> {
 impl<'window> DisplaySurface<'window> {
     /// Creates a `DisplaySurface` for the given window, blocking until the wgpu adapter and device
     /// are ready. `width` and `height` are the initial surface dimensions in physical pixels.
-    pub fn new(window: Arc<dyn Window>, width: usize, height: usize) -> Self {
+    pub fn new(window: Arc<dyn winit::window::Window>, width: usize, height: usize) -> Self {
         pollster::block_on(Self::init_async(window, width, height))
     }
 
-    async fn init_async(window: Arc<dyn Window>, width: usize, height: usize) -> Self {
+    async fn init_async(
+        window: Arc<dyn winit::window::Window>,
+        width: usize,
+        height: usize,
+    ) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance
             .create_surface(window.clone())
@@ -199,7 +249,7 @@ impl<'window> DisplaySurface<'window> {
         );
 
         Self {
-            window: Some(window),
+            window: Some(Window::new(window)),
             cpu_texture: Self::create_cpu_texture(&device, width as u32, height as u32),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Nearest,
@@ -340,29 +390,19 @@ impl<'window> DisplaySurface<'window> {
         );
     }
 
-    pub fn release_mouse(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = &self.window {
-            window.set_cursor_visible(true);
-            window.set_cursor_grab(CursorGrabMode::None)?;
-            Ok(())
-        } else {
-            Err("Window not initialized".into())
-        }
+    pub fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.window.as_mut().unwrap().release_mouse()
     }
 
-    pub fn capture_mouse(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = &self.window {
-            window.set_cursor_visible(false);
-            window.set_cursor_grab(CursorGrabMode::Confined)?;
-            Ok(())
-        } else {
-            Err("Window not initialized".into())
-        }
+    pub fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.window.as_mut().unwrap().capture_mouse()
     }
 
     pub fn request_redraw(&self) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        self.window.as_ref().unwrap().request_redraw();
+    }
+
+    pub fn is_cursor_grabbed(&self) -> bool {
+        self.window.as_ref().unwrap().is_cursor_grabbed()
     }
 }
