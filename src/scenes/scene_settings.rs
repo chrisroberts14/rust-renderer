@@ -22,3 +22,35 @@ impl SceneSettings {
         self.show_overlay = !self.show_overlay;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toggle_render_lights() {
+        let mut settings = SceneSettings::default();
+        settings.toggle_render_lights();
+        assert!(settings.render_lights);
+        settings.toggle_render_lights();
+        assert!(!settings.render_lights);
+    }
+
+    #[test]
+    fn test_toggle_wire_frame_mode() {
+        let mut settings = SceneSettings::default();
+        settings.toggle_wire_frame_mode();
+        assert!(settings.wire_frame_mode);
+        settings.toggle_wire_frame_mode();
+        assert!(!settings.wire_frame_mode);
+    }
+
+    #[test]
+    fn test_toggle_overlay() {
+        let mut settings = SceneSettings::default();
+        settings.toggle_overlay();
+        assert!(settings.show_overlay);
+        settings.toggle_overlay();
+        assert!(!settings.show_overlay);
+    }
+}
