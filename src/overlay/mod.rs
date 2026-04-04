@@ -1,20 +1,40 @@
-use crate::{framebuffer::Framebuffer, overlay::stats_overlay::StatsOverlay};
+use crate::{
+    framebuffer::Framebuffer,
+    overlay::{fps::FpsCounter, stats_overlay::StatsOverlay},
+};
 
+mod fps;
 pub mod stats_overlay;
 mod text;
 
 /// Manages all the different overlays that can be drawn on top of the rendered image.
 pub struct OverlayManager {
+    // The FPS counter is a special case because we want to update it every frame
+    fps_counter: FpsCounter,
+    last_frame_time: std::time::Instant,
+
     pub stats_overlay: StatsOverlay,
 }
 
 impl OverlayManager {
     pub fn new(stats_overlay: StatsOverlay) -> Self {
-        Self { stats_overlay }
+        Self {
+            fps_counter: FpsCounter::new(),
+            stats_overlay,
+            last_frame_time: std::time::Instant::now(),
+        }
     }
 
-    pub fn write_to_framebuffer(&self, framebuffer: &mut Framebuffer) {
+    pub fn write_to_framebuffer(&mut self, framebuffer: &mut Framebuffer) {
+        // Add the FPS stat to the stats overlay before writing it to the framebuffer
+        self.stats_overlay
+            .add("fps", &self.fps_counter.fps.to_string());
         self.stats_overlay.write_to_framebuffer(framebuffer);
+
+        let now = std::time::Instant::now();
+        self.fps_counter.tick(now - self.last_frame_time);
+
+        self.last_frame_time = now;
     }
 
     pub fn create_new_stats_overlay(&mut self, defaults: Vec<(&str, &str)>) {

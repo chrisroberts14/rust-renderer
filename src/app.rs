@@ -1,7 +1,6 @@
 use std::iter::Cycle;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 use std::vec::IntoIter;
 
 use winit::application::ApplicationHandler;
@@ -13,7 +12,6 @@ use winit::window::{Window, WindowAttributes};
 use crate::display::DisplaySurface;
 use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::{SceneFile, get_all_scene_files};
-use crate::fps::FpsCounter;
 use crate::framebuffer::Framebuffer;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
@@ -29,8 +27,6 @@ const FAST_SPEED: f32 = 0.25;
 pub struct App {
     display: Option<DisplaySurface<'static>>,
     scene: Scene,
-    fps_counter: FpsCounter,
-    last_frame_time: Instant,
     fast_move: bool,
     scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
@@ -58,8 +54,6 @@ impl App {
             Some(scene) => Ok(Self {
                 display: None,
                 scene,
-                fps_counter: FpsCounter::new(),
-                last_frame_time: Instant::now(),
                 fast_move: false,
                 scene_files: None,
                 renderer,
@@ -74,8 +68,6 @@ impl App {
                 Ok(Self {
                     display: None,
                     scene,
-                    fps_counter: FpsCounter::new(),
-                    last_frame_time: Instant::now(),
                     fast_move: false,
                     scene_files: Some(scene_files_iter),
                     renderer,
@@ -283,17 +275,11 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
                 let stats = self.scene.render_scene(&*self.renderer);
-                let now = Instant::now();
-                let elapsed = now.duration_since(self.last_frame_time);
-                self.last_frame_time = now;
-                self.fps_counter.tick(elapsed);
 
                 if self.scene.settings.show_overlay {
                     for (key, val) in &stats {
                         self.overlays.add_stat(key, val);
                     }
-                    self.overlays
-                        .add_stat("fps", &self.fps_counter.fps.to_string());
                 }
 
                 let display = self.display.as_ref().expect("Display not initialized");
