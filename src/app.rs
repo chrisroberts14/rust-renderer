@@ -217,8 +217,6 @@ impl App {
     }
 
     /// Lock the mouse to the window and hide the cursor
-    /// With some window managers we have to use Locked and for others (like Wayland) we have to
-    /// use Confined, so we try Locked first and fall back to Confined
     fn lock_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.display.as_ref().unwrap().capture_mouse()?;
         self.cursor_grabbed = true;
