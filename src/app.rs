@@ -7,8 +7,9 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes};
 
 use crate::display::DisplaySurface;
+use crate::file::file_iter::FileIter;
 use crate::file::key_bindings_file::{Action, KeyBindings};
-use crate::file::scene_file::{SceneFile, SceneFileIter};
+use crate::file::scene_file::SceneFile;
 use crate::framebuffer::Framebuffer;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
@@ -25,7 +26,7 @@ pub struct App {
     display: Option<DisplaySurface<'static>>,
     scene: Scene,
     fast_move: bool,
-    scene_files: Option<SceneFileIter>, // If this is empty a specific scene was rendered
+    scene_files: Option<FileIter>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
     overlays: OverlayManager,
     key_bindings: KeyBindings,
@@ -58,7 +59,7 @@ impl App {
                 key_bindings,
             }),
             _ => {
-                let mut scene_files_iter = SceneFileIter::new()?;
+                let mut scene_files_iter = FileIter::new("assets/scene_defs")?;
                 let next_scene = scene_files_iter
                     .next()
                     .ok_or("No scene files found in assets/scene_defs")?;
