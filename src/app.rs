@@ -1,7 +1,4 @@
-use std::iter::Cycle;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::vec::IntoIter;
 
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
@@ -11,7 +8,7 @@ use winit::window::{Window, WindowAttributes};
 
 use crate::display::DisplaySurface;
 use crate::file::key_bindings_file::{Action, KeyBindings};
-use crate::file::scene_file::{SceneFile, get_all_scene_files};
+use crate::file::scene_file::{SceneFile, SceneFileIter};
 use crate::framebuffer::Framebuffer;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
@@ -28,7 +25,7 @@ pub struct App {
     display: Option<DisplaySurface<'static>>,
     scene: Scene,
     fast_move: bool,
-    scene_files: Option<Cycle<IntoIter<PathBuf>>>, // If this is empty a specific scene was rendered
+    scene_files: Option<SceneFileIter>, // If this is empty a specific scene was rendered
     renderer: Box<dyn Renderer>,
     overlays: OverlayManager,
     key_bindings: KeyBindings,
@@ -61,8 +58,10 @@ impl App {
                 key_bindings,
             }),
             _ => {
-                let mut scene_files_iter = get_all_scene_files()?.into_iter().cycle();
-                let next_scene = scene_files_iter.next().ok_or("No scene files found")?;
+                let mut scene_files_iter = SceneFileIter::new()?;
+                let next_scene = scene_files_iter
+                    .next()
+                    .ok_or("No scene files found in assets/scene_defs")?;
                 let scene = SceneFile::from_file(next_scene, width, height)?;
 
                 Ok(Self {

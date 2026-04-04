@@ -10,8 +10,10 @@ use crate::{
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
 use std::error::Error;
+use std::iter::Cycle;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::vec::IntoIter;
 /// This file defines the schema for json files which specify a given scene to render
 ///
 /// We also define the reading and validation
@@ -157,14 +159,35 @@ impl SceneFile {
     }
 }
 
-/// Get all files in the assets/scene_defs directory
-pub fn get_all_scene_files() -> io::Result<Vec<PathBuf>> {
-    fs::read_dir("assets/scene_defs")?
-        .map(|res| res.map(|entry| entry.path()))
-        .filter(|res| {
-            res.as_ref()
-                .map(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-                .unwrap_or(false)
+/// Circular iterator over all scene files in the assets/scene_defs directory
+pub struct SceneFileIter {
+    iter: Cycle<IntoIter<PathBuf>>,
+}
+
+impl SceneFileIter {
+    pub fn new() -> io::Result<Self> {
+        let files: Vec<PathBuf> = fs::read_dir("assets/scene_defs")?
+            .filter_map(|res| {
+                let entry = res.ok()?; // DirEntry
+                let path = entry.path(); // PathBuf
+                if path.extension()?.to_str()? == "json" {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(Self {
+            iter: files.into_iter().cycle(),
         })
-        .collect()
+    }
+}
+
+impl Iterator for SceneFileIter {
+    type Item = PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
 }
