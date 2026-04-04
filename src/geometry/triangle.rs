@@ -10,8 +10,17 @@ pub struct Triangle {
 }
 
 impl Triangle {
-    pub(crate) fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Triangle {
-        Triangle { v0, v1, v2 }
+    pub(crate) fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
+        Self { v0, v1, v2 }
+    }
+
+    /// Method to create a triangle which has no z value (i.e. a 2D screen triangle)
+    pub(crate) fn screen_triangle(p0: Vec2, p1: Vec2, p2: Vec2) -> Self {
+        Self::new(
+            Vec3::new(p0.x, p0.y, 0.0),
+            Vec3::new(p1.x, p1.y, 0.0),
+            Vec3::new(p2.x, p2.y, 0.0),
+        )
     }
 
     pub fn project(

@@ -389,14 +389,6 @@ pub(super) fn bin_triangles(
     bins
 }
 
-fn create_screen_triangle(p0: Vec2, p1: Vec2, p2: Vec2) -> Triangle {
-    Triangle::new(
-        Vec3::new(p0.x, p0.y, 0.0),
-        Vec3::new(p1.x, p1.y, 0.0),
-        Vec3::new(p2.x, p2.y, 0.0),
-    )
-}
-
 /// Rasterizes all triangles assigned to a tile, clamping pixel iteration to the tile bounds.
 pub(super) fn rasterize_tile(
     tile: &Tile,
@@ -419,7 +411,7 @@ pub(super) fn rasterize_tile(
         let [v0, v1, v2] = tri.verts;
 
         // Screen-space triangle used for bounding box and point containment tests.
-        let screen_tri = create_screen_triangle(p0, p1, p2);
+        let screen_tri = Triangle::screen_triangle(p0, p1, p2);
 
         // Clamp rasterization bounds to the tile (already backface-culled in prepare_object).
         let (min, max) = screen_tri.bounding_box();
@@ -485,7 +477,7 @@ pub(super) fn rasterize_tile(
 pub(super) fn draw_wireframe(triangles: &[PreparedTriangle], framebuffer: &Framebuffer) {
     for tri in triangles {
         let [p0, p1, p2] = tri.screen;
-        let screen_tri = create_screen_triangle(p0, p1, p2);
+        let screen_tri = Triangle::screen_triangle(p0, p1, p2);
         framebuffer.draw_triangle_wireframe(&screen_tri);
     }
 }
