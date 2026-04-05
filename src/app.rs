@@ -11,6 +11,7 @@ use crate::file::file_iter::FileIter;
 use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::SceneFile;
 use crate::framebuffer::Framebuffer;
+use crate::maths::vec3::Vec3;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::Renderer;
@@ -48,86 +49,68 @@ impl App {
         let stats_overlay =
             StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer_choice))]);
 
-        match scene_option {
-            Some(scene) => Ok(Self {
-                display: None,
-                scene,
-                fast_move: false,
-                scene_files: None,
-                renderer,
-                overlays: OverlayManager::new(stats_overlay),
-                key_bindings,
-            }),
-            _ => {
-                let mut scene_files_iter = FileIter::new("assets/scene_defs")?;
-                let next_scene = scene_files_iter
-                    .next()
-                    .ok_or("No scene files found in assets/scene_defs")?;
-                let scene = SceneFile::from_file(next_scene, width, height)?;
+        let (scene, scene_files) = if let Some(scene) = scene_option {
+            (scene, None)
+        } else {
+            let mut iter = FileIter::new("assets/scene_defs")?;
+            let next = iter.next().ok_or("No scene files found")?;
+            let scene = SceneFile::from_file(next, width, height)?;
+            (scene, Some(iter))
+        };
 
-                Ok(Self {
-                    display: None,
-                    scene,
-                    fast_move: false,
-                    scene_files: Some(scene_files_iter),
-                    renderer,
-                    overlays: OverlayManager::new(stats_overlay),
-                    key_bindings,
-                })
-            }
-        }
+        Ok(Self {
+            display: None,
+            scene,
+            fast_move: false,
+            scene_files,
+            renderer,
+            overlays: OverlayManager::new(stats_overlay),
+            key_bindings,
+        })
     }
 
-    fn move_speed(&self) -> f32 {
-        if self.fast_move {
+    fn move_camera(&mut self, direction: Vec3, sign: f32) {
+        let speed = if self.fast_move {
             FAST_SPEED
         } else {
             NORMAL_SPEED
-        }
+        };
+        self.scene.camera.move_camera(direction * speed * sign);
+    }
+
+    fn display_mut(&mut self) -> &mut DisplaySurface<'static> {
+        self.display.as_mut().expect("Display not initialized")
+    }
+
+    fn display_ref(&self) -> &DisplaySurface<'static> {
+        self.display.as_ref().expect("Display not initialized")
     }
 
     fn perform_action(&mut self, action: &Action) -> Result<(), Box<dyn std::error::Error>> {
         match action {
             Action::MoveForward => {
-                let dir = self.scene.camera.forward();
-                self.scene.camera.move_camera(dir * self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.forward(), 1.0);
             }
             Action::MoveBackward => {
-                let dir = self.scene.camera.forward();
-                self.scene.camera.move_camera(dir * -self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.forward(), -1.0);
             }
             Action::MoveRight => {
-                let dir = self.scene.camera.right();
-                self.scene.camera.move_camera(dir * self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.right(), 1.0);
             }
             Action::MoveLeft => {
-                let dir = self.scene.camera.right();
-                self.scene.camera.move_camera(dir * -self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.right(), -1.0);
             }
             Action::MoveUp => {
-                self.scene
-                    .camera
-                    .move_camera(self.scene.camera.up() * self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.up(), 1.0);
             }
             Action::MoveDown => {
-                self.scene
-                    .camera
-                    .move_camera(self.scene.camera.up() * -self.move_speed());
-                Ok(())
+                self.move_camera(self.scene.camera.up(), -1.0);
             }
-            Action::SpeedModifier => Ok(()),
             Action::ToggleWireframe => {
                 self.scene.settings.toggle_wire_frame_mode();
-                Ok(())
             }
             Action::ToggleLights => {
                 self.scene.settings.toggle_render_lights();
-                Ok(())
             }
             Action::NextScene => {
                 if let Some(next_scene) = self.scene_files.as_mut().and_then(|sf| sf.next()) {
@@ -141,42 +124,38 @@ impl App {
                     self.scene.settings = old_settings;
                     self.scene.spawn_update_thread();
                 }
-                Ok(())
             }
             Action::IncreaseTiles => {
                 self.renderer.increase_tile_count(1);
-                Ok(())
             }
             Action::DecreaseTiles => {
                 self.renderer.decrease_tile_count(1);
-                Ok(())
             }
             Action::ToggleOverlay => {
                 self.scene.settings.toggle_overlay();
-                Ok(())
             }
             Action::ReleaseMouse => {
-                self.display.as_mut().unwrap().release_mouse()?;
-                Ok(())
+                self.display_mut().release_mouse()?;
             }
             Action::NextRenderer => {
                 let choice = self.renderer.renderer_choice().next();
                 // Clear the overlay so only stats from the new renderer are shown
                 self.overlays
                     .create_new_stats_overlay(vec![("renderer_type", &format!("{}", choice))]);
-                self.renderer = if matches!(choice, RendererChoice::Gpu) {
-                    if let Some(display) = &self.display {
-                        Box::new(GpuRasterRenderer::from_display(display))
-                    } else {
-                        choice.into_renderer()
+                self.renderer = match choice {
+                    RendererChoice::Gpu => {
+                        if let Some(display) = &self.display {
+                            Box::new(GpuRasterRenderer::from_display(display))
+                        } else {
+                            choice.into_renderer()
+                        }
                     }
-                } else {
-                    choice.into_renderer()
+                    _ => choice.into_renderer(),
                 };
-
-                Ok(())
             }
+            _ => {}
         }
+        Ok(())
     }
 
     /// Handle keyboard entries
@@ -194,14 +173,17 @@ impl App {
         let Some(action) = self.key_bindings.bindings.get(&key_str).cloned() else {
             return Ok(());
         };
-        match action {
-            Action::SpeedModifier => {
-                self.fast_move = key_event.state == ElementState::Pressed;
-                Ok(())
-            }
-            _ if key_event.state == ElementState::Pressed => self.perform_action(&action),
-            _ => Ok(()),
+
+        if matches!(action, Action::SpeedModifier) {
+            self.fast_move = key_event.state == ElementState::Pressed;
+            return Ok(());
         }
+
+        if key_event.state == ElementState::Pressed {
+            self.perform_action(&action)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -243,22 +225,15 @@ impl ApplicationHandler for App {
         // If the renderer is GPU, reinitialize it using the shared device from the display so that
         // GPU textures can be blitted directly to the surface without a CPU readback.
         if self.renderer.renderer_choice() == RendererChoice::Gpu {
-            self.renderer = Box::new(GpuRasterRenderer::from_display(
-                self.display.as_ref().unwrap(),
-            ));
+            self.renderer = Box::new(GpuRasterRenderer::from_display(self.display_ref()));
         }
 
-        self.display
-            .as_mut()
-            .unwrap()
+        self.display_mut()
             .capture_mouse()
             .expect("Failed to capture mouse");
 
         // Request the first frame to be drawn
-        self.display
-            .as_ref()
-            .expect("Display not initialized")
-            .request_redraw();
+        self.display_ref().request_redraw();
     }
 
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
@@ -285,7 +260,6 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                let display = self.display.as_ref().expect("Display not initialized");
                 if let Some(view) = self.renderer.take_gpu_view() {
                     let overlay = self.scene.settings.show_overlay.then(|| {
                         let mut fb = Framebuffer::new(
@@ -295,26 +269,22 @@ impl ApplicationHandler for App {
                         self.overlays.write_to_framebuffer(&mut fb);
                         fb
                     });
-                    display.present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
+                    self.display_ref()
+                        .present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
                 } else {
                     if self.scene.settings.show_overlay {
                         self.overlays
                             .write_to_framebuffer(&mut self.scene.framebuffer);
                     }
-                    display.present_cpu_frame(self.scene.framebuffer.as_bytes());
+                    self.display_ref()
+                        .present_cpu_frame(self.scene.framebuffer.as_bytes());
                 }
 
                 // Render the next frame
-                self.display
-                    .as_ref()
-                    .expect("Display not initialized")
-                    .request_redraw();
+                self.display_ref().request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
-                self.display
-                    .as_mut()
-                    .expect("Display not initialized")
-                    .resize(new_size.width, new_size.height);
+                self.display_mut().resize(new_size.width, new_size.height);
                 self.scene
                     .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);
@@ -332,7 +302,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::Focused(gained_focus) => {
-                if gained_focus && let Err(error) = self.display.as_mut().unwrap().capture_mouse() {
+                if gained_focus && let Err(error) = self.display_mut().capture_mouse() {
                     eprintln!("Error locking the mouse: {:?}", error);
                 }
             }
@@ -340,9 +310,7 @@ impl ApplicationHandler for App {
                 state: ElementState::Pressed,
                 ..
             } => self
-                .display
-                .as_mut()
-                .unwrap()
+                .display_mut()
                 .capture_mouse()
                 .expect("Failed to capture mouse"),
             _ => (),
@@ -356,7 +324,7 @@ impl ApplicationHandler for App {
         event: DeviceEvent,
     ) {
         if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
-            && self.display.as_ref().unwrap().is_cursor_grabbed()
+            && self.display_ref().is_cursor_grabbed()
         {
             self.scene.camera.process_mouse(dx as f32, dy as f32);
         }
