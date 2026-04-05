@@ -58,12 +58,14 @@ impl Object {
         }
     }
 
-    /// Function to determine if a given point falls within the bounding box of the object
-    pub(crate) fn is_within_bounding_box(&self, point: &Vec3) -> bool {
+    /// Returns the world-space axis-aligned bounding box as (min, max), or None if the mesh has no vertices.
+    pub(crate) fn bounding_box(&self) -> Option<(Vec3, Vec3)> {
+        if self.mesh.vertices.is_empty() {
+            return None;
+        }
         let model = self.transform.matrix();
         let mut min = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
         let mut max = Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
-
         for &vertex in &self.mesh.vertices {
             let t = model * vertex.to_vec4();
             if t.x < min.x { min.x = t.x; }
@@ -73,7 +75,12 @@ impl Object {
             if t.y > max.y { max.y = t.y; }
             if t.z > max.z { max.z = t.z; }
         }
+        Some((min, max))
+    }
 
+    /// Function to determine if a given point falls within the bounding box of the object
+    pub(crate) fn is_within_bounding_box(&self, point: &Vec3) -> bool {
+        let Some((min, max)) = self.bounding_box() else { return false };
         point.x >= min.x && point.x <= max.x
             && point.y >= min.y && point.y <= max.y
             && point.z >= min.z && point.z <= max.z

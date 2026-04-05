@@ -59,6 +59,40 @@ impl Scene {
             .any(|obj| obj.is_within_bounding_box(point))
     }
 
+    /// If the camera is inside any object's bounding box (e.g. because the object moved into it),
+    /// push the camera out along the axis of minimum penetration.
+    fn push_camera_out_of_objects(&mut self) {
+        let bounding_boxes: Vec<(Vec3, Vec3)> = {
+            let objects = self.objects.read().unwrap();
+            objects.iter().filter_map(|obj| obj.bounding_box()).collect()
+        };
+
+        for (min, max) in bounding_boxes {
+            let p = self.camera.position;
+            if p.x < min.x || p.x > max.x
+                || p.y < min.y || p.y > max.y
+                || p.z < min.z || p.z > max.z
+            {
+                continue;
+            }
+            // Find the face with the smallest overlap and push the camera out through it.
+            let overlaps = [
+                (p.x - min.x, Vec3::new(-1.0, 0.0, 0.0)),
+                (max.x - p.x, Vec3::new(1.0, 0.0, 0.0)),
+                (p.y - min.y, Vec3::new(0.0, -1.0, 0.0)),
+                (max.y - p.y, Vec3::new(0.0, 1.0, 0.0)),
+                (p.z - min.z, Vec3::new(0.0, 0.0, -1.0)),
+                (max.z - p.z, Vec3::new(0.0, 0.0, 1.0)),
+            ];
+            let (depth, axis) = overlaps
+                .iter()
+                .copied()
+                .min_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .unwrap();
+            self.camera.position = self.camera.position + (axis * depth);
+        }
+    }
+
     fn dispatch_render(
         &self,
         renderer: &dyn Renderer,
@@ -110,6 +144,7 @@ impl Scene {
     /// 1. Draw the skybox
     /// 2. Render the scene objects (with light source boxes appended, if enabled)
     pub fn render_scene(&mut self, renderer: &dyn Renderer) -> Vec<(&'static str, String)> {
+        self.push_camera_out_of_objects();
         self.framebuffer.clear();
         if let Some(skybox) = &self.skybox {
             self.framebuffer.draw_skybox(skybox, &self.camera);
