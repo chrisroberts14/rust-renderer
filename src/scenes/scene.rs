@@ -51,6 +51,14 @@ impl Scene {
         spawn_update_thread_for(&self.objects, &running)
     }
 
+    pub(crate) fn is_point_inside_any_object(&self, point: &Vec3) -> bool {
+        self.objects
+            .read()
+            .unwrap()
+            .iter()
+            .any(|obj| obj.is_within_bounding_box(point))
+    }
+
     fn dispatch_render(
         &self,
         renderer: &dyn Renderer,

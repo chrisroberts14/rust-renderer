@@ -1,5 +1,6 @@
 use crate::geometry::mesh::Mesh;
 use crate::geometry::transform::Transform;
+use crate::maths::vec3::Vec3;
 use crate::scenes::material::Material;
 
 #[allow(clippy::type_complexity)]
@@ -55,5 +56,26 @@ impl Object {
         if let Some(f) = &self.update {
             f(&mut self.transform);
         }
+    }
+
+    /// Function to determine if a given point falls within the bounding box of the object
+    pub(crate) fn is_within_bounding_box(&self, point: &Vec3) -> bool {
+        let model = self.transform.matrix();
+        let mut min = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+        let mut max = Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+
+        for &vertex in &self.mesh.vertices {
+            let t = model * vertex.to_vec4();
+            if t.x < min.x { min.x = t.x; }
+            if t.y < min.y { min.y = t.y; }
+            if t.z < min.z { min.z = t.z; }
+            if t.x > max.x { max.x = t.x; }
+            if t.y > max.y { max.y = t.y; }
+            if t.z > max.z { max.z = t.z; }
+        }
+
+        point.x >= min.x && point.x <= max.x
+            && point.y >= min.y && point.y <= max.y
+            && point.z >= min.z && point.z <= max.z
     }
 }
