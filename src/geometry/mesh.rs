@@ -8,6 +8,7 @@ pub struct Mesh {
     pub normals: Vec<Vec3>,
     pub uvs: Vec<Vec2>,
     pub uv_faces: Vec<(usize, usize, usize)>,
+    pub aabb_bounding_box: Option<(Vec3, Vec3)>,
 }
 
 impl Mesh {
@@ -18,13 +19,31 @@ impl Mesh {
         uv_faces: Vec<(usize, usize, usize)>,
     ) -> Self {
         let normals = Self::compute_vertex_normals(&vertices, &faces);
+        let aabb_bounding_box = Self::compute_aabb(&vertices);
         Self {
             vertices,
             faces,
             normals,
             uvs,
             uv_faces,
+            aabb_bounding_box
         }
+    }
+
+    fn compute_aabb(vertices: &[Vec3]) -> Option<(Vec3, Vec3)> {
+        if vertices.is_empty() {
+            return None;
+        }
+
+        let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
+
+        for &v in vertices {
+            min = min.min(v);
+            max = max.max(v);
+        }
+
+        Some((min, max))
     }
 
     fn compute_vertex_normals(vertices: &[Vec3], faces: &[(usize, usize, usize)]) -> Vec<Vec3> {

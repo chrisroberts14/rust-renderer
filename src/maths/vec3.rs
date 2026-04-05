@@ -104,6 +104,25 @@ impl Vec3 {
             w: 1.0,
         }
     }
+
+    /// Compute the vector which contains the minimums of each value in two different vectors
+    pub fn min(&self, other: Vec3) -> Vec3 {
+        Vec3::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
+    }
+
+    /// Compute the vector which contains the maximums of each value in two different vectors
+    pub fn max(&self, other: Vec3) -> Vec3 {
+        Vec3::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
+    }
+
 }
 
 impl Sub for Vec3 {

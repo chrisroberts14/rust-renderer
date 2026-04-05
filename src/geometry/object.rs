@@ -60,22 +60,31 @@ impl Object {
 
     /// Returns the world-space axis-aligned bounding box as (min, max), or None if the mesh has no vertices.
     pub(crate) fn bounding_box(&self) -> Option<(Vec3, Vec3)> {
-        if self.mesh.vertices.is_empty() {
-            return None;
-        }
+        let (min, max) = self.mesh.aabb_bounding_box?;
+
         let model = self.transform.matrix();
-        let mut min = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
-        let mut max = Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for &vertex in &self.mesh.vertices {
-            let t = model * vertex.to_vec4();
-            if t.x < min.x { min.x = t.x; }
-            if t.y < min.y { min.y = t.y; }
-            if t.z < min.z { min.z = t.z; }
-            if t.x > max.x { max.x = t.x; }
-            if t.y > max.y { max.y = t.y; }
-            if t.z > max.z { max.z = t.z; }
+
+        let corners = [
+            Vec3::new(min.x, min.y, min.z),
+            Vec3::new(min.x, min.y, max.z),
+            Vec3::new(min.x, max.y, min.z),
+            Vec3::new(min.x, max.y, max.z),
+            Vec3::new(max.x, min.y, min.z),
+            Vec3::new(max.x, min.y, max.z),
+            Vec3::new(max.x, max.y, min.z),
+            Vec3::new(max.x, max.y, max.z),
+        ];
+
+        let mut new_min = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+        let mut new_max = Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+
+        for corner in corners {
+            let t = (model * corner.to_vec4()).to_vec3();
+            new_min = new_min.min(t);
+            new_max = new_max.max(t);
         }
-        Some((min, max))
+
+        Some((new_min, new_max))
     }
 
     /// Function to determine if a given point falls within the bounding box of the object
