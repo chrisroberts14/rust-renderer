@@ -43,12 +43,6 @@ impl Camera {
         Mat4::perspective(self.fov, self.aspect_ratio, self.near, self.far)
     }
 
-    /// Move the camera by a given amount
-    /// This will add the vec given here to the position vector of the camera
-    pub fn move_camera(&mut self, vec: Vec3) {
-        self.position = self.position + vec;
-    }
-
     pub fn forward(&self) -> Vec3 {
         let yaw = self.rotation.y;
         let pitch = self.rotation.x;

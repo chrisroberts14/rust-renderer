@@ -78,7 +78,7 @@ impl App {
         let new_position = self.scene.camera.position + (direction * sign * speed);
         // Check for collision with any objects
         if !self.scene.is_point_inside_any_object(&new_position) {
-            self.scene.camera.move_camera(direction * speed * sign);
+            self.scene.camera.position = new_position;
         }
     }
 
