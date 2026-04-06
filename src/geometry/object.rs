@@ -1,17 +1,18 @@
+use crate::geometry::animation::Animation;
 use crate::geometry::mesh::Mesh;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::material::Material;
 use std::fmt;
 use std::fmt::Debug;
+use std::sync::Arc;
 
-#[allow(clippy::type_complexity)]
 pub struct Object {
     pub mesh: Mesh,
     pub transform: Transform,
     pub material: Material,
     pub is_light: bool,
-    update: Option<Box<dyn Fn(&mut Transform) + Send + Sync>>,
+    animation: Option<Arc<dyn Animation>>,
 }
 
 impl Debug for Object {
@@ -21,21 +22,19 @@ impl Debug for Object {
             .field("transform", &self.transform)
             .field("material", &self.material)
             .field("is_light", &self.is_light)
-            .field("update", &"<closure>")
+            .field("animation", &self.animation.as_ref().map(|_| "<animation>"))
             .finish()
     }
 }
 
 impl Clone for Object {
-    /// Clones the object's geometry and material. The update closure is not cloned
-    /// as closures aren't Clone — cloned objects are treated as static for rendering.
     fn clone(&self) -> Self {
         Self {
             mesh: self.mesh.clone(),
             transform: self.transform,
             material: self.material.clone(),
             is_light: self.is_light,
-            update: None,
+            animation: self.animation.clone(),
         }
     }
 }
@@ -47,7 +46,7 @@ impl Object {
             transform,
             material,
             is_light: false,
-            update: None,
+            animation: None,
         }
     }
 
@@ -57,18 +56,20 @@ impl Object {
         self
     }
 
-    /// Register a function that is called every update tick to animate this object.
-    pub fn with_update<F>(mut self, f: F) -> Self
-    where
-        F: Fn(&mut Transform) + Send + Sync + 'static,
-    {
-        self.update = Some(Box::new(f));
+    /// Attach an animation that is called every update tick.
+    pub fn with_animation(mut self, animation: impl Animation + 'static) -> Self {
+        self.animation = Some(Arc::new(animation));
         self
     }
 
+    /// Returns the attached animation, if any.
+    pub fn animation(&self) -> Option<&dyn Animation> {
+        self.animation.as_deref()
+    }
+
     pub(crate) fn update(&mut self) {
-        if let Some(f) = &self.update {
-            f(&mut self.transform);
+        if let Some(anim) = &self.animation {
+            anim.tick(&mut self.transform);
         }
     }
 

@@ -1,3 +1,4 @@
+pub mod animation;
 pub mod cube;
 pub mod mesh;
 pub mod obj_loader;

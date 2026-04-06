@@ -1,3 +1,4 @@
+use crate::geometry::animation::DeltaAnimation;
 use crate::geometry::update_thread::ThreadedUpdate;
 use crate::scenes::lights::spot_light::SpotLight;
 use crate::{
@@ -66,9 +67,9 @@ impl ObjectSchema {
                 let mesh = ObjLoader::load(obj_path)?;
                 let object = Object::new(mesh, transform, Material::Color(colour));
                 let object = if let Some(upd) = update {
-                    object.with_update(move |t| {
-                        t.rotation = t.rotation + upd.rotation;
-                        t.position = t.position + upd.position;
+                    object.with_animation(DeltaAnimation {
+                        rotation: upd.rotation,
+                        position: upd.position,
                     })
                 } else {
                     object
