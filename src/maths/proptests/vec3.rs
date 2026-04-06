@@ -1,6 +1,5 @@
-#[cfg(test)]
-use proptest::prelude::*;
 use crate::maths::vec3::Vec3;
+use proptest::prelude::*;
 
 // Generates Vec3 with components in [-10, 10] — large enough to be interesting,
 // small enough that accumulated f32 error stays below our tolerances.

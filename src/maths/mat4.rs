@@ -3,7 +3,7 @@ use std::ops::Mul;
 
 use crate::maths::vec4::Vec4;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Mat4 {
     pub m: [[f32; 4]; 4],
 }
