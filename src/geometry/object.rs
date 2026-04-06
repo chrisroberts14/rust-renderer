@@ -89,9 +89,14 @@ impl Object {
 
     /// Function to determine if a given point falls within the bounding box of the object
     pub(crate) fn is_within_bounding_box(&self, point: &Vec3) -> bool {
-        let Some((min, max)) = self.bounding_box() else { return false };
-        point.x >= min.x && point.x <= max.x
-            && point.y >= min.y && point.y <= max.y
-            && point.z >= min.z && point.z <= max.z
+        let Some((min, max)) = self.bounding_box() else {
+            return false;
+        };
+        point.x >= min.x
+            && point.x <= max.x
+            && point.y >= min.y
+            && point.y <= max.y
+            && point.z >= min.z
+            && point.z <= max.z
     }
 }

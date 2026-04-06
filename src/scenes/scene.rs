@@ -64,14 +64,20 @@ impl Scene {
     fn push_camera_out_of_objects(&mut self) {
         let bounding_boxes: Vec<(Vec3, Vec3)> = {
             let objects = self.objects.read().unwrap();
-            objects.iter().filter_map(|obj| obj.bounding_box()).collect()
+            objects
+                .iter()
+                .filter_map(|obj| obj.bounding_box())
+                .collect()
         };
 
         for (min, max) in bounding_boxes {
             let p = self.camera.position;
-            if p.x < min.x || p.x > max.x
-                || p.y < min.y || p.y > max.y
-                || p.z < min.z || p.z > max.z
+            if p.x < min.x
+                || p.x > max.x
+                || p.y < min.y
+                || p.y > max.y
+                || p.z < min.z
+                || p.z > max.z
             {
                 continue;
             }

@@ -26,7 +26,7 @@ impl Mesh {
             normals,
             uvs,
             uv_faces,
-            aabb_bounding_box
+            aabb_bounding_box,
         }
     }
 
