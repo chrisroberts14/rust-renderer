@@ -1,7 +1,5 @@
-use crate::geometry::cube::Cube;
 use crate::geometry::mesh::Mesh;
 use crate::geometry::object::Object;
-use crate::geometry::sphere::Sphere;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::lights::Light;
@@ -23,10 +21,15 @@ prop_compose! {
 }
 
 fn mesh() -> impl Strategy<Value = Mesh> {
-    prop_oneof![
-        (0.1f32..5.0).prop_map(|s| Cube::mesh(s)),
-        (0.1f32..3.0, 4u32..8, 4u32..8).prop_map(|(r, st, sl)| Sphere::mesh(r, st, sl)),
-    ]
+    (3usize..=16).prop_flat_map(|n_verts| {
+        let vertices = proptest::collection::vec(
+            (-10.0f32..10.0, -10.0f32..10.0, -10.0f32..10.0)
+                .prop_map(|(x, y, z)| Vec3::new(x, y, z)),
+            n_verts,
+        );
+        let faces = proptest::collection::vec((0..n_verts, 0..n_verts, 0..n_verts), 1..=12);
+        (vertices, faces).prop_map(|(vertices, faces)| Mesh::new(vertices, faces, vec![], vec![]))
+    })
 }
 
 fn material() -> impl Strategy<Value = Material> {
