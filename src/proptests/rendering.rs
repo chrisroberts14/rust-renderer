@@ -71,8 +71,15 @@ fn scene() -> impl Strategy<Value = Scene> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
     use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
     use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
+    use std::sync::{LazyLock, Mutex};
+
+    // Initialised once; Mutex serialises access so only one proptest iteration
+    // touches the GPU at a time without recreating the device each run.
+    static GPU_RENDERER: LazyLock<Mutex<GpuRasterRenderer>> =
+        LazyLock::new(|| Mutex::new(GpuRasterRenderer::new()));
 
     proptest! {
         #[test]
@@ -88,7 +95,14 @@ mod tests {
         }
 
         #[test]
-        fn single_and_multi_thread_produce_identical_output(mut scene in scene()) {
+        fn gpu_renders_without_panic(mut scene in scene()) {
+            let renderer = GPU_RENDERER.lock().unwrap();
+            scene.render_scene(&*renderer);
+        }
+
+        /// We don't check the GPU renderer here as it may legitimately disagree
+        #[test]
+        fn cpu_renderers_produce_identical_output(mut scene in scene()) {
             let single = SingleThreadRasterRenderer::new(32);
             let multi = MultiThreadRasterRenderer::new(32);
 
