@@ -52,16 +52,20 @@ fn light() -> impl Strategy<Value = Arc<dyn Light>> {
     )
 }
 
-prop_compose! {
-    fn scene()(
-        width in 64u32..256,
-        height in 64u32..256,
-        objects in proptest::collection::vec(object(), 0..4),
-        lights in proptest::collection::vec(light(), 0..3),
-        ambient in 0.0f32..1.0,
-    ) -> Scene {
-        Scene::new(width as f32, height as f32, objects, lights, ambient)
-    }
+fn scene() -> impl Strategy<Value = Scene> {
+    (
+        64u32..256,
+        64u32..256,
+        proptest::collection::vec(object(), 0..4),
+        proptest::collection::vec(light(), 0..3),
+        0.0f32..1.0,
+    )
+        .prop_map(|(width, height, objects, lights, ambient)| {
+            Scene::new(width as f32, height as f32, objects, lights, ambient)
+        })
+        .prop_filter("camera must not start inside any object", |scene| {
+            !scene.is_point_inside_any_object(&scene.camera.position)
+        })
 }
 
 #[cfg(test)]
@@ -88,12 +92,9 @@ mod tests {
             let single = SingleThreadRasterRenderer::new(32);
             let multi = MultiThreadRasterRenderer::new(32);
 
-            let camera_before = scene.camera.clone();
-
             scene.render_scene(&single);
             let single_pixels = scene.framebuffer.as_bytes().to_vec();
 
-            scene.camera = camera_before;
             scene.render_scene(&multi);
             let multi_pixels = scene.framebuffer.as_bytes().to_vec();
 
