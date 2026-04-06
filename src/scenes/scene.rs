@@ -1,6 +1,6 @@
 use crate::geometry::cube::Cube;
 use crate::geometry::transform::Transform;
-use crate::geometry::update_thread::{UpdateThread, spawn_update_thread_for};
+use crate::geometry::update_thread::{UpdateStrategy, UpdateThread};
 use crate::maths::vec3::Vec3;
 use crate::renderer::Renderer;
 use crate::scenes::camera::Camera;
@@ -9,7 +9,6 @@ use crate::scenes::material::Material;
 use crate::scenes::scene_settings::SceneSettings;
 use crate::scenes::texture::Texture;
 use crate::{framebuffer::Framebuffer, geometry::object::Object};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
@@ -31,12 +30,11 @@ impl Scene {
         objects: Vec<Object>,
         lights: Vec<Arc<dyn Light>>,
         ambient: f32,
+        strategy: impl UpdateStrategy,
     ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
-        let running = Arc::new(AtomicBool::new(true));
-
         Self {
-            _update_thread: Some(spawn_update_thread_for(&objects, &running)),
+            _update_thread: strategy.start(&objects),
             objects,
             framebuffer: Framebuffer::new(width as usize, height as usize),
             camera: Camera::new(width, height),
@@ -45,11 +43,6 @@ impl Scene {
             skybox: None,
             ambient,
         }
-    }
-
-    pub(crate) fn spawn_update_thread(&self) -> UpdateThread {
-        let running = Arc::new(AtomicBool::new(true));
-        spawn_update_thread_for(&self.objects, &running)
     }
 
     pub(crate) fn is_point_inside_any_object(&self, point: &Vec3) -> bool {

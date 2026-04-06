@@ -126,7 +126,6 @@ impl App {
                     )?;
                     self.scene = scene;
                     self.scene.settings = old_settings;
-                    self.scene.spawn_update_thread();
                 }
             }
             Action::IncreaseTiles => {

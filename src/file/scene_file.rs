@@ -1,3 +1,4 @@
+use crate::geometry::update_thread::ThreadedUpdate;
 use crate::scenes::lights::spot_light::SpotLight;
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
@@ -153,6 +154,7 @@ impl SceneFile {
             objs,
             lights,
             scene.ambient,
+            ThreadedUpdate,
         ))
     }
 }

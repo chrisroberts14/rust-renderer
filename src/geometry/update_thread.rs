@@ -34,9 +34,33 @@ impl Drop for UpdateThread {
     }
 }
 
-/// Spawn a thread that calls each object's registered update function every ~16 ms.
-/// Returns an `UpdateThread` whose `Drop` impl stops it cleanly.
-pub fn spawn_update_thread_for(
+/// Controls how a scene's objects are updated each tick.
+pub trait UpdateStrategy {
+    /// Attach the strategy to the object list. Returns an `UpdateThread` handle if a background
+    /// thread was spawned; `None` for strategies that don't run a thread.
+    fn start(self, objects: &Arc<RwLock<Vec<Object>>>) -> Option<UpdateThread>;
+}
+
+/// Spawns a background thread that calls each object's update function every ~16 ms.
+pub struct ThreadedUpdate;
+
+impl UpdateStrategy for ThreadedUpdate {
+    fn start(self, objects: &Arc<RwLock<Vec<Object>>>) -> Option<UpdateThread> {
+        let running = Arc::new(AtomicBool::new(true));
+        Some(spawn_update_thread_for(objects, &running))
+    }
+}
+
+/// Does not run any updates. Useful in tests where deterministic, animation-free scenes are needed.
+pub struct NoOpUpdate;
+
+impl UpdateStrategy for NoOpUpdate {
+    fn start(self, _objects: &Arc<RwLock<Vec<Object>>>) -> Option<UpdateThread> {
+        None
+    }
+}
+
+fn spawn_update_thread_for(
     objects: &Arc<RwLock<Vec<Object>>>,
     running: &Arc<AtomicBool>,
 ) -> UpdateThread {

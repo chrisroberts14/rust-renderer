@@ -1,6 +1,7 @@
 use crate::geometry::mesh::Mesh;
 use crate::geometry::object::Object;
 use crate::geometry::transform::Transform;
+use crate::geometry::update_thread::NoOpUpdate;
 use crate::maths::vec3::Vec3;
 use crate::scenes::lights::Light;
 use crate::scenes::lights::pointlight::PointLight;
@@ -64,7 +65,14 @@ fn scene() -> impl Strategy<Value = Scene> {
         0.0f32..1.0,
     )
         .prop_map(|(width, height, objects, lights, ambient)| {
-            Scene::new(width as f32, height as f32, objects, lights, ambient)
+            Scene::new(
+                width as f32,
+                height as f32,
+                objects,
+                lights,
+                ambient,
+                NoOpUpdate,
+            )
         })
         .prop_filter("camera must not start inside any object", |scene| {
             !scene.is_point_inside_any_object(&scene.camera.position)
