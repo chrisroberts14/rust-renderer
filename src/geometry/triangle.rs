@@ -15,7 +15,7 @@ impl Triangle {
     }
 
     /// Method to create a triangle which has no z value (i.e. a 2D screen triangle)
-    pub(crate) fn screen_triangle(p0: Vec2, p1: Vec2, p2: Vec2) -> Self {
+    pub fn screen_triangle(p0: Vec2, p1: Vec2, p2: Vec2) -> Self {
         Self::new(
             Vec3::new(p0.x, p0.y, 0.0),
             Vec3::new(p1.x, p1.y, 0.0),
