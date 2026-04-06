@@ -52,7 +52,7 @@ impl App {
         let (scene, scene_files) = if let Some(scene) = scene_option {
             (scene, None)
         } else {
-            let mut iter = FileIter::new("assets/scene_defs")?;
+            let mut iter = FileIter::with_extension("assets/scene_defs", "json")?;
             let next = iter.next().ok_or("No scene files found")?;
             let scene = SceneFile::from_file(next, width, height)?;
             (scene, Some(iter))

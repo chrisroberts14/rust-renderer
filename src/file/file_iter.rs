@@ -8,7 +8,6 @@ pub struct FileIter {
     iter: Cycle<IntoIter<PathBuf>>,
 }
 
-#[allow(dead_code)]
 impl FileIter {
     pub fn new(dir: &str) -> std::io::Result<Self> {
         let files: Vec<PathBuf> = std::fs::read_dir(dir)?
