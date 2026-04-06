@@ -3,7 +3,7 @@ use crate::scenes::lights::Light;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-#[derive(Deserialize, JsonSchema, Clone)]
+#[derive(Deserialize, JsonSchema, Clone, Debug)]
 pub struct SpotLight {
     position: Vec3,
     direction: Vec3,

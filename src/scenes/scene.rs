@@ -12,6 +12,7 @@ use crate::{framebuffer::Framebuffer, geometry::object::Object};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 
+#[derive(Debug)]
 pub struct Scene {
     objects: Arc<RwLock<Vec<Object>>>,
     pub(crate) framebuffer: Framebuffer,

@@ -12,7 +12,7 @@ fn default_scale() -> Vec3 {
     Vec3::ONE
 }
 
-#[derive(JsonSchema, Deserialize, Clone, Copy)]
+#[derive(JsonSchema, Deserialize, Clone, Copy, Debug)]
 pub struct Transform {
     #[serde(default = "default_zero")]
     pub position: Vec3,

@@ -1,7 +1,7 @@
 use std::io;
 use std::path::Path;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Texture {
     pub width: u32,
     pub height: u32,

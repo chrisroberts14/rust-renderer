@@ -1,3 +1,4 @@
+pub use crate::cache::LruCache;
 pub mod app;
 pub mod cache;
 mod display;
@@ -9,4 +10,5 @@ mod overlay;
 pub mod renderer;
 pub mod scenes;
 
-pub use crate::cache::LruCache;
+#[cfg(test)]
+mod proptests;

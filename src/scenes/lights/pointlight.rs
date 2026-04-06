@@ -4,7 +4,7 @@ use serde::Deserialize;
 use crate::maths::vec3::Vec3;
 use crate::scenes::lights::Light;
 
-#[derive(Deserialize, JsonSchema, Clone)]
+#[derive(Deserialize, JsonSchema, Clone, Debug)]
 pub struct PointLight {
     pub position: Vec3,
     pub colour: [f32; 3],

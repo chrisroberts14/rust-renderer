@@ -8,6 +8,7 @@ use crate::geometry::object::Object;
 /// Struct to return when creating the update thread
 ///
 /// This exists so we can define a method that stops the thread cleanly when it is dropped
+#[derive(Debug)]
 pub struct UpdateThread {
     join_handle: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,

@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 /// A structure representing a framebuffer with a specified width, height, and pixel data.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Framebuffer {
     pub width: usize,
     pub height: usize,
@@ -53,10 +53,7 @@ impl Framebuffer {
             return; // silently ignore out-of-bounds
         }
         let idx = y * self.width + x;
-        self.pixels[idx].store(
-            u32::from_ne_bytes(color),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.pixels[idx].store(u32::from_ne_bytes(color), Ordering::Relaxed);
     }
 
     /// Clear the framebuffer to be all black
@@ -76,7 +73,7 @@ impl Framebuffer {
         }
         let idx = y * self.width + x;
         let depth_bits = depth.to_bits();
-        let mut current = self.depth[idx].load(std::sync::atomic::Ordering::Relaxed);
+        let mut current = self.depth[idx].load(Ordering::Relaxed);
         loop {
             if depth_bits >= current {
                 return false;
@@ -84,8 +81,8 @@ impl Framebuffer {
             match self.depth[idx].compare_exchange_weak(
                 current,
                 depth_bits,
-                std::sync::atomic::Ordering::Relaxed,
-                std::sync::atomic::Ordering::Relaxed,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
             ) {
                 Ok(_) => return true,
                 Err(actual) => current = actual,

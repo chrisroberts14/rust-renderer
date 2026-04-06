@@ -50,6 +50,9 @@ impl Vec3 {
 
     pub fn normalise(&self) -> Vec3 {
         let len = self.length();
+        if len == 0.0 {
+            return Vec3::ZERO;
+        }
         Vec3 {
             x: self.x / len,
             y: self.y / len,

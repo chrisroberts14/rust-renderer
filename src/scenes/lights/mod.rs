@@ -3,7 +3,7 @@ pub mod spot_light;
 
 use crate::maths::vec3::Vec3;
 
-pub trait Light: Send + Sync {
+pub trait Light: Send + Sync + std::fmt::Debug {
     fn direction_to(&self, point: Vec3) -> Vec3;
     fn intensity_at(&self, point: Vec3) -> f32;
     fn colour_at(&self, point: Vec3) -> [f32; 3];

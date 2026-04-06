@@ -2,6 +2,8 @@ use crate::geometry::mesh::Mesh;
 use crate::geometry::transform::Transform;
 use crate::maths::vec3::Vec3;
 use crate::scenes::material::Material;
+use std::fmt;
+use std::fmt::Debug;
 
 #[allow(clippy::type_complexity)]
 pub struct Object {
@@ -10,6 +12,18 @@ pub struct Object {
     pub material: Material,
     pub is_light: bool,
     update: Option<Box<dyn Fn(&mut Transform) + Send + Sync>>,
+}
+
+impl Debug for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Object")
+            .field("mesh", &self.mesh)
+            .field("transform", &self.transform)
+            .field("material", &self.material)
+            .field("is_light", &self.is_light)
+            .field("update", &"<closure>")
+            .finish()
+    }
 }
 
 impl Clone for Object {

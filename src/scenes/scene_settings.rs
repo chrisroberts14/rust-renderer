@@ -1,5 +1,5 @@
 /// Struct to contain settings about the scene
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct SceneSettings {
     pub(crate) render_lights: bool,
     pub(crate) wire_frame_mode: bool,
