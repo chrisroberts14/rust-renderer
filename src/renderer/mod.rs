@@ -210,7 +210,7 @@ fn clip_to_frustum(triangle: [Vert; 3], camera: &Camera) -> Vec<[Vert; 3]> {
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).
-fn shade(
+pub fn shade(
     normal: Vec3,
     world_pos: Vec3,
     view_dir: Vec3,

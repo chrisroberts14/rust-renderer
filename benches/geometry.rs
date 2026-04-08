@@ -1,6 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use rust_renderer::geometry::triangle::Triangle;
 use rust_renderer::maths::vec2::Vec2;
+use std::hint::black_box;
 
 fn bench_contains_point(c: &mut Criterion) {
     let tri = Triangle::screen_triangle(
@@ -12,11 +13,11 @@ fn bench_contains_point(c: &mut Criterion) {
     let mut group = c.benchmark_group("triangle_contains_point");
 
     group.bench_function("inside", |b| {
-        b.iter(|| tri.contains_point(std::hint::black_box(50.0), std::hint::black_box(40.0)));
+        b.iter(|| tri.contains_point(black_box(50.0), black_box(40.0)));
     });
 
     group.bench_function("outside", |b| {
-        b.iter(|| tri.contains_point(std::hint::black_box(200.0), std::hint::black_box(200.0)));
+        b.iter(|| tri.contains_point(black_box(200.0), black_box(200.0)));
     });
 
     group.finish();
