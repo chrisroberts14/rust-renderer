@@ -173,8 +173,7 @@ impl Framebuffer {
 
                 // Build view-space ray and rotate into world space using camera axes
                 let view_ray = Vec3::new(ray_x, ray_y, -1.0);
-                let world_ray =
-                    (right * view_ray.x + up * view_ray.y + forward * (-view_ray.z)).normalise();
+                let world_ray = right * view_ray.x + up * view_ray.y + forward * (-view_ray.z);
 
                 // Convert world direction to equirectangular UV
                 let u = world_ray.z.atan2(world_ray.x) / (2.0 * std::f32::consts::PI) + 0.5;
