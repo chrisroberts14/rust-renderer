@@ -9,11 +9,13 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(width: u32, height: u32, rgba: Vec<u8>) -> Self {
+    pub fn new(width: u32, height: u32, rgba: [u8; 4]) -> Self {
+        let pixel_count = (width * height) as usize;
+        let rgba_vec = rgba.iter().cycle().take(pixel_count * 4).copied().collect();
         Self {
             width,
             height,
-            rgba,
+            rgba: rgba_vec,
         }
     }
 
