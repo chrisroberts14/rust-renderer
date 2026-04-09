@@ -1,6 +1,7 @@
 use crate::geometry::animation::DeltaAnimation;
 use crate::geometry::update_thread::ThreadedUpdate;
 use crate::scenes::lights::spot_light::SpotLight;
+use crate::scenes::texture::Texture;
 use crate::{
     geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
     scenes::{
@@ -109,17 +110,29 @@ impl LightSchema {
     }
 }
 
+/// Struct representing a skybox
+///
+/// This can either be a path to a file containing the texture or a solid colour
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum SkyboxSchema {
+    File {
+        path: PathBuf,
+    },
+    SolidColour {
+        #[serde(default = "default_colour")]
+        colour: [u8; 4],
+    },
+}
+
 /// This is a struct representing the whole file
-///
-/// For the initial implementation there are only lights and objects no skybox defined
-///
-/// TODO: Add skybox
 #[derive(JsonSchema, Deserialize)]
 pub struct SceneFile {
     objects: Vec<ObjectSchema>,
     lights: Vec<LightSchema>,
     #[serde(default = "default_ambient_light")]
     ambient: f32,
+    skybox: Option<SkyboxSchema>,
 }
 
 impl SceneFile {
@@ -149,6 +162,17 @@ impl SceneFile {
             .map(|l| l.into_arc_light())
             .collect();
 
+        let mut skybox: Option<Texture> = None;
+
+        if let Some(scene_skybox) = scene.skybox {
+            skybox = Some(match scene_skybox {
+                SkyboxSchema::File { path } => {
+                    Texture::load(&path).map_err(|e| Box::new(e) as Box<dyn Error>)?
+                }
+                SkyboxSchema::SolidColour { colour } => Texture::new(1, 1, colour),
+            });
+        }
+
         Ok(Scene::new(
             window_width,
             window_height,
@@ -156,6 +180,7 @@ impl SceneFile {
             lights,
             scene.ambient,
             ThreadedUpdate,
+            skybox,
         ))
     }
 }

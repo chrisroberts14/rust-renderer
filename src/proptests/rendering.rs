@@ -72,6 +72,7 @@ fn scene() -> impl Strategy<Value = Scene> {
                 lights,
                 ambient,
                 NoOpUpdate,
+                None,
             )
         })
         .prop_filter("camera must not start inside any object", |scene| {

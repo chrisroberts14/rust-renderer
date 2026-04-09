@@ -31,6 +31,7 @@ impl Scene {
         lights: Vec<Arc<dyn Light>>,
         ambient: f32,
         strategy: impl UpdateStrategy,
+        skybox: Option<Texture>,
     ) -> Self {
         let objects = Arc::new(RwLock::new(objects));
         Self {
@@ -40,7 +41,7 @@ impl Scene {
             camera: Camera::new(width, height),
             lights,
             settings: SceneSettings::default(),
-            skybox: None,
+            skybox,
             ambient,
         }
     }
