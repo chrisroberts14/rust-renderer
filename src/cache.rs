@@ -163,3 +163,30 @@ macro_rules! cached {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_with_missing_key() {
+        let mut cache = LruCache::<i32, i32>::new(10);
+        assert_eq!(cache.get(&1), None);
+    }
+
+    #[test]
+    fn test_get_previously_inserted_value() {
+        let mut cache = LruCache::<i32, i32>::new(10);
+        cache.insert(1, 2);
+        assert_eq!(cache.get(&1), Some(2));
+    }
+
+    #[test]
+    fn test_inserting_same_value_updates() {
+        let mut cache = LruCache::<i32, i32>::new(10);
+        cache.insert(1, 2);
+        assert_eq!(cache.get(&1), Some(2));
+        cache.insert(1, 3);
+        assert_eq!(cache.get(&1), Some(3));
+    }
+}
