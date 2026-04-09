@@ -167,6 +167,7 @@ macro_rules! cached {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
     fn test_get_with_missing_key() {
@@ -215,5 +216,41 @@ mod tests {
         cache.insert(2, 3);
         assert_eq!(cache.get(&1), None);
         assert_eq!(cache.get(&2), Some(3));
+    }
+
+    #[test]
+    fn test_macro_only_triggers_function_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        cached! {
+            fn my_func(input: i32) -> Result<i32, Box<dyn Error>> = 10 => {
+                CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+                Ok(input)
+            }
+        }
+
+        my_func(1).unwrap();
+        my_func(1).unwrap();
+
+        assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_macro_only_triggers_function_twice_with_diff_args() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        cached! {
+            fn my_func(input: i32) -> Result<i32, Box<dyn Error>> = 10 => {
+                CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+                Ok(input)
+            }
+        }
+
+        my_func(1).unwrap();
+        my_func(2).unwrap();
+
+        assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 2);
     }
 }
