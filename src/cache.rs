@@ -189,4 +189,31 @@ mod tests {
         cache.insert(1, 3);
         assert_eq!(cache.get(&1), Some(3));
     }
+
+    #[test]
+    fn test_least_recently_used_item_is_evicted() {
+        let mut cache = LruCache::<i32, i32>::new(10);
+        // Fill up the cache completely
+        for i in 1..11 {
+            cache.insert(i, i);
+        }
+        // Read the first item
+        cache.get(&1);
+        // Now add another item
+        cache.insert(100, 100);
+        // The least recently used item should now be "2"
+        assert_eq!(cache.get(&2), None);
+        // Also check the 1 value is still in the cache
+        assert_eq!(cache.get(&1), Some(1));
+    }
+
+    #[test]
+    fn test_single_sized_cache() {
+        let mut cache = LruCache::<i32, i32>::new(1);
+        cache.insert(1, 2);
+        assert_eq!(cache.get(&1), Some(2));
+        cache.insert(2, 3);
+        assert_eq!(cache.get(&1), None);
+        assert_eq!(cache.get(&2), Some(3));
+    }
 }
