@@ -253,4 +253,22 @@ mod tests {
 
         assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 2);
     }
+
+    #[test]
+    fn test_err_is_not_cached() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        cached! {
+            fn err_func(input: i32) -> Result<i32, Box<dyn Error>> = 10 => {
+                CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "test error")))
+            }
+        }
+
+        err_func(1).unwrap_err();
+        err_func(1).unwrap_err();
+
+        assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 2);
+    }
 }
