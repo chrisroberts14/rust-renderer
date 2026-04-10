@@ -3,6 +3,7 @@ pub mod cube;
 pub mod mesh;
 pub mod obj_loader;
 pub mod object;
+pub(crate) mod physics;
 pub mod plane;
 pub mod sphere;
 pub mod transform;

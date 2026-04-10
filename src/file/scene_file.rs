@@ -86,7 +86,8 @@ impl ObjectSchema {
                 Plane::mesh(size, subdivisions),
                 transform,
                 Material::Color(colour),
-            )),
+            )
+            .as_static()),
         }
     }
 }

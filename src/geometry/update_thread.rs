@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::geometry::object::Object;
+use crate::geometry::physics;
 
 /// Struct to return when creating the update thread
 ///
@@ -67,12 +68,16 @@ fn spawn_update_thread_for(
     let objects = Arc::clone(objects);
     let thread_running = Arc::clone(running);
     let handle = thread::spawn(move || {
+        let mut last_tick = Instant::now();
         while thread_running.load(Ordering::Relaxed) {
+            let dt = last_tick.elapsed().as_secs_f32();
+            last_tick = Instant::now();
             {
                 let mut objs = objects.write().unwrap_or_else(|e| e.into_inner());
                 for object in objs.iter_mut() {
-                    object.update();
+                    object.update(dt);
                 }
+                physics::step(&mut objs);
             }
             thread::sleep(Duration::from_millis(16));
         }

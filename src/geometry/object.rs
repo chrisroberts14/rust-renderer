@@ -7,12 +7,16 @@ use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Object {
     pub mesh: Mesh,
     pub transform: Transform,
     pub material: Material,
     pub is_light: bool,
     animation: Option<Arc<dyn Animation>>,
+    pub(crate) velocity: Vec3,
+    pub(crate) mass: f32,
+    pub(crate) is_static: bool,
 }
 
 impl Debug for Object {
@@ -27,18 +31,6 @@ impl Debug for Object {
     }
 }
 
-impl Clone for Object {
-    fn clone(&self) -> Self {
-        Self {
-            mesh: self.mesh.clone(),
-            transform: self.transform,
-            material: self.material.clone(),
-            is_light: self.is_light,
-            animation: self.animation.clone(),
-        }
-    }
-}
-
 impl Object {
     pub fn new(mesh: Mesh, transform: Transform, material: Material) -> Self {
         Self {
@@ -47,12 +39,21 @@ impl Object {
             material,
             is_light: false,
             animation: None,
+            velocity: Vec3::new(0.0, 0.0, 0.0),
+            mass: 1.0,
+            is_static: false,
         }
     }
 
     /// Marks this object as a light source, causing it to be rendered unlit (full brightness).
     pub fn as_light(mut self) -> Self {
         self.is_light = true;
+        self
+    }
+
+    /// Marks this object as static, excluding it from physics simulation.
+    pub fn as_static(mut self) -> Self {
+        self.is_static = true;
         self
     }
 
@@ -67,9 +68,19 @@ impl Object {
         self.animation.as_deref()
     }
 
-    pub(crate) fn update(&mut self) {
+    pub(crate) fn update(&mut self, dt: f32) {
         if let Some(anim) = &self.animation {
             anim.tick(&mut self.transform);
+        }
+
+        if !self.is_static {
+            const GRAVITY: Vec3 = Vec3 {
+                x: 0.0,
+                y: -9.81,
+                z: 0.0,
+            };
+            self.velocity = self.velocity + GRAVITY * dt;
+            self.transform.position = self.transform.position + self.velocity * dt;
         }
     }
 
@@ -99,7 +110,17 @@ impl Object {
             new_max = new_max.max(t);
         }
 
-        Some((new_min, new_max))
+        // Enforce a minimum thickness on each axis so flat geometry (e.g. planes) still
+        // produces a collision volume that objects cannot pass through.
+        const MIN_HALF_THICKNESS: f32 = 0.05;
+        let center = (new_min + new_max) * 0.5;
+        let half = (new_max - new_min) * 0.5;
+        let half = Vec3::new(
+            half.x.max(MIN_HALF_THICKNESS),
+            half.y.max(MIN_HALF_THICKNESS),
+            half.z.max(MIN_HALF_THICKNESS),
+        );
+        Some((center - half, center + half))
     }
 
     /// Function to determine if a given point falls within the bounding box of the object
