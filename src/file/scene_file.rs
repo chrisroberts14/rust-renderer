@@ -3,7 +3,9 @@ use crate::geometry::update_thread::ThreadedUpdate;
 use crate::scenes::lights::spot_light::SpotLight;
 use crate::scenes::texture::Texture;
 use crate::{
-    geometry::{obj_loader::ObjLoader, object::Object, plane::Plane, transform::Transform},
+    geometry::{
+        obj_loader::ObjLoader, object::Object, plane::Plane, sphere::Sphere, transform::Transform,
+    },
     scenes::{
         lights::{Light, pointlight::PointLight},
         material::Material,
@@ -28,6 +30,10 @@ fn default_subdivisions() -> u32 {
     8
 }
 
+fn default_stacks_slices() -> u32 {
+    16
+}
+
 /// The default ambient light if none is specified in the file
 fn default_ambient_light() -> f32 {
     0.15
@@ -50,6 +56,16 @@ enum ObjectSchema {
         size: f32,
         #[serde(default = "default_subdivisions")]
         subdivisions: u32,
+        transform: Transform,
+        #[serde(default = "default_colour")]
+        colour: [u8; 4],
+    },
+    Sphere {
+        radius: f32,
+        #[serde(default = "default_stacks_slices")]
+        stacks: u32,
+        #[serde(default = "default_stacks_slices")]
+        slices: u32,
         transform: Transform,
         #[serde(default = "default_colour")]
         colour: [u8; 4],
@@ -88,6 +104,17 @@ impl ObjectSchema {
                 Material::Color(colour),
             )
             .as_static()),
+            ObjectSchema::Sphere {
+                radius,
+                stacks,
+                slices,
+                transform,
+                colour,
+            } => Ok(Object::new(
+                Sphere::mesh(radius, stacks, slices),
+                transform,
+                Material::Color(colour),
+            )),
         }
     }
 }
@@ -130,7 +157,7 @@ enum SkyboxSchema {
 #[derive(JsonSchema, Deserialize)]
 pub struct SceneFile {
     objects: Vec<ObjectSchema>,
-    lights: Vec<LightSchema>,
+    lights: Option<Vec<LightSchema>>,
     #[serde(default = "default_ambient_light")]
     ambient: f32,
     skybox: Option<SkyboxSchema>,
@@ -159,6 +186,7 @@ impl SceneFile {
 
         let lights: Vec<Arc<dyn Light>> = scene
             .lights
+            .unwrap_or_default()
             .into_iter()
             .map(|l| l.into_arc_light())
             .collect();
