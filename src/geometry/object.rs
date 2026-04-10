@@ -7,6 +7,12 @@ use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+#[derive(Clone, Debug)]
+pub enum CollisionShape {
+    Aabb,
+    Sphere { radius: f32 },
+}
+
 #[derive(Clone)]
 pub struct Object {
     pub mesh: Mesh,
@@ -17,6 +23,7 @@ pub struct Object {
     pub(crate) velocity: Vec3,
     pub(crate) mass: f32,
     pub(crate) is_static: bool,
+    pub(crate) collision_shape: CollisionShape,
 }
 
 impl Debug for Object {
@@ -42,6 +49,7 @@ impl Object {
             velocity: Vec3::new(0.0, 0.0, 0.0),
             mass: 1.0,
             is_static: false,
+            collision_shape: CollisionShape::Aabb,
         }
     }
 
@@ -54,6 +62,12 @@ impl Object {
     /// Marks this object as static, excluding it from physics simulation.
     pub fn as_static(mut self) -> Self {
         self.is_static = true;
+        self
+    }
+
+    /// Use a sphere collider of the given radius instead of an AABB.
+    pub fn with_sphere_collider(mut self, radius: f32) -> Self {
+        self.collision_shape = CollisionShape::Sphere { radius };
         self
     }
 

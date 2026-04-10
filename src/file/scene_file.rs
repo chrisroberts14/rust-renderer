@@ -114,7 +114,8 @@ impl ObjectSchema {
                 Sphere::mesh(radius, stacks, slices),
                 transform,
                 Material::Color(colour),
-            )),
+            )
+            .with_sphere_collider(radius)),
         }
     }
 }
