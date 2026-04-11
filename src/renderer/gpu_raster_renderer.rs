@@ -6,7 +6,6 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
-use crate::renderer::RendererChoice;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -658,13 +657,13 @@ impl GpuRasterRenderer {
                 .to_string(),
         )]
     }
+
+    pub fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
+        self.last_colour_view.borrow_mut().take()
+    }
 }
 
 impl super::Renderer for GpuRasterRenderer {
-    fn renderer_choice(&self) -> RendererChoice {
-        RendererChoice::Gpu
-    }
-
     /// Renders all objects with Phong shading, copies the result from the GPU to the CPU
     /// framebuffer, and returns triangle statistics.
     fn render_objects(
@@ -687,9 +686,5 @@ impl super::Renderer for GpuRasterRenderer {
         framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)> {
         self.render_scene(objects, camera, &[], framebuffer, 1.0, true)
-    }
-
-    fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
-        self.last_colour_view.borrow_mut().take()
     }
 }

@@ -1,6 +1,6 @@
 /// Single threaded version of the raster renderer. Used for testing and debugging,
 /// as it is not as performant as the multi-threaded version.
-use super::{RendererChoice, prepare_render, rasterize_tile};
+use super::{prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::draw_wireframe;
@@ -16,13 +16,19 @@ impl SingleThreadRasterRenderer {
     pub fn new(tile_size: usize) -> Self {
         Self { tile_size }
     }
+
+    pub fn increase_tile_count(&mut self, delta: usize) {
+        self.tile_size += delta;
+    }
+
+    pub fn decrease_tile_count(&mut self, delta: usize) {
+        if self.tile_size - delta >= 1 {
+            self.tile_size -= delta;
+        }
+    }
 }
 
 impl super::Renderer for SingleThreadRasterRenderer {
-    fn renderer_choice(&self) -> RendererChoice {
-        RendererChoice::SingleThreadRaster
-    }
-
     fn render_objects(
         &self,
         objects: &[Object],
@@ -61,15 +67,5 @@ impl super::Renderer for SingleThreadRasterRenderer {
         let (triangles, _, _) = prepare_render(objects, camera, framebuffer, self.tile_size);
         draw_wireframe(&triangles, framebuffer);
         vec![("Triangle Count", triangles.len().to_string())]
-    }
-
-    fn increase_tile_count(&mut self, delta: usize) {
-        self.tile_size += delta;
-    }
-
-    fn decrease_tile_count(&mut self, delta: usize) {
-        if self.tile_size - delta >= 1 {
-            self.tile_size -= delta;
-        }
     }
 }

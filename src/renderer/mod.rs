@@ -17,14 +17,15 @@ use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use clap::ValueEnum;
+use std::fmt;
 use std::sync::Arc;
 use strum_macros::Display;
 use wgpu;
 
 const SHININESS: i32 = 32;
 
-/// Enum to allow for choosing a given Renderer
-/// Once a renderer is implemented it will need to be "registered" here
+/// CLI argument type for selecting an initial renderer.
+/// Once a renderer is implemented it will need to be "registered" here.
 #[derive(Clone, ValueEnum, Display, PartialEq)]
 pub enum RendererChoice {
     SingleThreadRaster,
@@ -33,22 +34,109 @@ pub enum RendererChoice {
 }
 
 impl RendererChoice {
-    /// Turns the enum into an Arc pointer to the actual struct
-    pub fn into_renderer(self) -> Box<dyn Renderer> {
+    pub fn into_active(self) -> ActiveRenderer {
         match self {
-            RendererChoice::SingleThreadRaster => Box::new(SingleThreadRasterRenderer::new(32)),
-            RendererChoice::MultiThreadRaster => Box::new(MultiThreadRasterRenderer::new(32)),
-            RendererChoice::Gpu => Box::new(GpuRasterRenderer::new()),
+            RendererChoice::SingleThreadRaster => {
+                ActiveRenderer::SingleThreadRaster(Box::new(SingleThreadRasterRenderer::new(32)))
+            }
+            RendererChoice::MultiThreadRaster => {
+                ActiveRenderer::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
+            }
+            RendererChoice::Gpu => ActiveRenderer::Gpu(Box::default()),
+        }
+    }
+}
+
+/// The active renderer, wrapping a concrete renderer instance.
+///
+/// Implements [`Renderer`] by delegating to the inner type, and exposes variant-specific
+/// operations (tile count, GPU view) directly — so callers never need to runtime-check the
+/// variant just to call a method.
+pub enum ActiveRenderer {
+    SingleThreadRaster(Box<SingleThreadRasterRenderer>),
+    MultiThreadRaster(Box<MultiThreadRasterRenderer>),
+    Gpu(Box<GpuRasterRenderer>),
+}
+
+impl ActiveRenderer {
+    /// Cycles to the next renderer in the sequence, replacing the current one in place.
+    pub fn next(&mut self) {
+        *self = match self {
+            Self::SingleThreadRaster(_) => {
+                Self::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
+            }
+            Self::MultiThreadRaster(_) => Self::Gpu(Box::default()),
+            Self::Gpu(_) => Self::SingleThreadRaster(Box::new(SingleThreadRasterRenderer::new(32))),
+        };
+    }
+
+    /// Returns the GPU colour texture view from the most recent render, or `None` for CPU renderers.
+    pub fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
+        match self {
+            Self::Gpu(r) => r.take_gpu_view(),
+            _ => None,
         }
     }
 
-    /// Get the next renderer in the cycle
-    /// This is a hacky way to implement it but works since there are so few renderers
-    pub fn next(self) -> Self {
+    /// Increases the tile count. No-op on the GPU renderer.
+    pub fn increase_tile_count(&mut self, delta: usize) {
         match self {
-            RendererChoice::SingleThreadRaster => RendererChoice::MultiThreadRaster,
-            RendererChoice::MultiThreadRaster => RendererChoice::Gpu,
-            RendererChoice::Gpu => RendererChoice::SingleThreadRaster,
+            Self::SingleThreadRaster(r) => r.increase_tile_count(delta),
+            Self::MultiThreadRaster(r) => r.increase_tile_count(delta),
+            Self::Gpu(_) => {}
+        }
+    }
+
+    /// Decreases the tile count. No-op on the GPU renderer.
+    pub fn decrease_tile_count(&mut self, delta: usize) {
+        match self {
+            Self::SingleThreadRaster(r) => r.decrease_tile_count(delta),
+            Self::MultiThreadRaster(r) => r.decrease_tile_count(delta),
+            Self::Gpu(_) => {}
+        }
+    }
+}
+
+impl Renderer for ActiveRenderer {
+    fn render_objects(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        lights: &[Arc<dyn Light>],
+        framebuffer: &Framebuffer,
+        ambient: f32,
+    ) -> Vec<(&'static str, String)> {
+        match self {
+            Self::SingleThreadRaster(r) => {
+                r.render_objects(objects, camera, lights, framebuffer, ambient)
+            }
+            Self::MultiThreadRaster(r) => {
+                r.render_objects(objects, camera, lights, framebuffer, ambient)
+            }
+            Self::Gpu(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
+        }
+    }
+
+    fn render_wireframe(
+        &self,
+        objects: &[Object],
+        camera: &Camera,
+        framebuffer: &Framebuffer,
+    ) -> Vec<(&'static str, String)> {
+        match self {
+            Self::SingleThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::MultiThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::Gpu(r) => r.render_wireframe(objects, camera, framebuffer),
+        }
+    }
+}
+
+impl fmt::Display for ActiveRenderer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SingleThreadRaster(_) => write!(f, "SingleThreadRaster"),
+            Self::MultiThreadRaster(_) => write!(f, "MultiThreadRaster"),
+            Self::Gpu(_) => write!(f, "Gpu"),
         }
     }
 }
@@ -59,9 +147,6 @@ impl RendererChoice {
 /// The framebuffer is not cleared by any of these methods — the caller is responsible for
 /// pre-filling it (e.g. with a skybox) before invoking the renderer.
 pub trait Renderer {
-    /// Get the renderer choice of this renderer
-    fn renderer_choice(&self) -> RendererChoice;
-
     /// Render all objects into the framebuffer using the given camera and lights.
     fn render_objects(
         &self,
@@ -81,22 +166,6 @@ pub trait Renderer {
         camera: &Camera,
         framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)>;
-
-    /// Increase the number of tiles
-    /// Is a no-op if the renderer is not tile based
-    #[allow(unused_variables)]
-    fn increase_tile_count(&mut self, delta: usize) {}
-
-    /// Decrease the number of tiles
-    /// Is a no-op if the renderer is not tile based
-    #[allow(unused_variables)]
-    fn decrease_tile_count(&mut self, delta: usize) {}
-
-    /// Returns the GPU colour texture view produced by the most recent render call, if any.
-    /// Only implemented by the GPU renderer; CPU renderers return `None`.
-    fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
-        None
-    }
 }
 
 /// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile

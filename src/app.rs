@@ -14,8 +14,7 @@ use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
-use crate::renderer::Renderer;
-use crate::renderer::RendererChoice;
+use crate::renderer::ActiveRenderer;
 use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
 use crate::scenes::scene::Scene;
 
@@ -28,7 +27,7 @@ pub struct App {
     scene: Scene,
     fast_move: bool,
     scene_files: Option<FileIter>, // If this is empty a specific scene was rendered
-    renderer: Box<dyn Renderer>,
+    renderer: ActiveRenderer,
     overlays: OverlayManager,
     key_bindings: KeyBindings,
 }
@@ -39,15 +38,14 @@ impl App {
     /// If this is left empty the first in the scene defs file will be loaded instead
     pub fn new(
         scene_option: Option<Scene>,
-        renderer: Box<dyn Renderer>,
+        renderer: ActiveRenderer,
         width: f32,
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
 
-        let renderer_choice = renderer.renderer_choice();
         let stats_overlay =
-            StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer_choice))]);
+            StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer))]);
 
         let (scene, scene_files) = if let Some(scene) = scene_option {
             (scene, None)
@@ -141,20 +139,18 @@ impl App {
                 self.display_mut().release_mouse()?;
             }
             Action::NextRenderer => {
-                let choice = self.renderer.renderer_choice().next();
+                self.renderer.next();
+                if matches!(self.renderer, ActiveRenderer::Gpu(_))
+                    && let Some(display) = &self.display
+                {
+                    self.renderer =
+                        ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(display)));
+                }
                 // Clear the overlay so only stats from the new renderer are shown
-                self.overlays
-                    .create_new_stats_overlay(vec![("renderer_type", &format!("{}", choice))]);
-                self.renderer = match choice {
-                    RendererChoice::Gpu => {
-                        if let Some(display) = &self.display {
-                            Box::new(GpuRasterRenderer::from_display(display))
-                        } else {
-                            choice.into_renderer()
-                        }
-                    }
-                    _ => choice.into_renderer(),
-                };
+                self.overlays.create_new_stats_overlay(vec![(
+                    "renderer_type",
+                    &format!("{}", self.renderer),
+                )]);
             }
             _ => {}
         }
@@ -227,8 +223,10 @@ impl ApplicationHandler for App {
 
         // If the renderer is GPU, reinitialize it using the shared device from the display so that
         // GPU textures can be blitted directly to the surface without a CPU readback.
-        if self.renderer.renderer_choice() == RendererChoice::Gpu {
-            self.renderer = Box::new(GpuRasterRenderer::from_display(self.display_ref()));
+        if matches!(self.renderer, ActiveRenderer::Gpu(_)) {
+            self.renderer = ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(
+                self.display_ref(),
+            )));
         }
 
         self.display_mut()
@@ -252,7 +250,7 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 // Render the whole scene and when that is done tick the fps counter
-                let stats = self.scene.render_scene(&*self.renderer);
+                let stats = self.scene.render_scene(&self.renderer);
 
                 if self.scene.settings.show_overlay {
                     for (key, val) in &stats {

@@ -27,7 +27,7 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let renderer = args.renderer.into_renderer();
+    let renderer = args.renderer.into_active();
 
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Wait);
