@@ -83,14 +83,18 @@ pub trait Renderer {
     ) -> Vec<(&'static str, String)>;
 
     /// Increase the number of tiles
-    /// Is a no-op if the renderer is not tile based
+    /// Will panic if this is called on a renderer without it implemented
     #[allow(unused_variables)]
-    fn increase_tile_count(&mut self, delta: usize) {}
+    fn increase_tile_count(&mut self, delta: usize) {
+        unimplemented!()
+    }
 
     /// Decrease the number of tiles
-    /// Is a no-op if the renderer is not tile based
+    /// Will panic if this is called on a renderer without it implemented
     #[allow(unused_variables)]
-    fn decrease_tile_count(&mut self, delta: usize) {}
+    fn decrease_tile_count(&mut self, delta: usize) {
+        unimplemented!()
+    }
 
     /// Returns the GPU colour texture view produced by the most recent render call, if any.
     /// Only implemented by the GPU renderer; CPU renderers return `None`.
