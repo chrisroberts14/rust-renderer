@@ -97,9 +97,9 @@ pub trait Renderer {
     }
 
     /// Returns the GPU colour texture view produced by the most recent render call, if any.
-    /// Only implemented by the GPU renderer; CPU renderers return `None`.
+    /// Only implemented by the GPU renderer; CPU renderers panic.
     fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
-        None
+        unimplemented!()
     }
 }
 
