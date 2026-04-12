@@ -1,7 +1,3 @@
-use std::ops::Add;
-use std::ops::Mul;
-use std::ops::Sub;
-
 use crate::maths::vec3::Vec3;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -42,45 +38,6 @@ impl Vec4 {
             x: self.x,
             y: self.y,
             z: self.z,
-        }
-    }
-}
-
-impl Sub for Vec4 {
-    type Output = Vec4;
-
-    fn sub(self, other: Vec4) -> Vec4 {
-        Vec4 {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-            w: self.w - other.w,
-        }
-    }
-}
-
-impl Add for Vec4 {
-    type Output = Vec4;
-
-    fn add(self, other: Vec4) -> Vec4 {
-        Vec4 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-            w: self.w + other.w,
-        }
-    }
-}
-
-impl Mul<f32> for Vec4 {
-    type Output = Vec4;
-
-    fn mul(self, scalar: f32) -> Vec4 {
-        Vec4 {
-            x: self.x * scalar,
-            y: self.y * scalar,
-            z: self.z * scalar,
-            w: self.w * scalar,
         }
     }
 }

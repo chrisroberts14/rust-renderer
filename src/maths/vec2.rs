@@ -1,9 +1,3 @@
-use std::ops::Add;
-use std::ops::Div;
-use std::ops::Mul;
-use std::ops::Neg;
-use std::ops::Sub;
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vec2 {
     pub x: f32,
@@ -28,61 +22,6 @@ impl Vec2 {
         Vec2 {
             x: self.x / len,
             y: self.y / len,
-        }
-    }
-}
-
-impl Sub for Vec2 {
-    type Output = Vec2;
-
-    fn sub(self, other: Vec2) -> Vec2 {
-        Vec2 {
-            x: self.x - other.x,
-            y: self.y - other.y,
-        }
-    }
-}
-
-impl Add for Vec2 {
-    type Output = Vec2;
-
-    fn add(self, other: Vec2) -> Vec2 {
-        Vec2 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-        }
-    }
-}
-
-impl Mul<f32> for Vec2 {
-    type Output = Vec2;
-
-    fn mul(self, factor: f32) -> Vec2 {
-        Vec2 {
-            x: self.x * factor,
-            y: self.y * factor,
-        }
-    }
-}
-
-impl Div<f32> for Vec2 {
-    type Output = Vec2;
-
-    fn div(self, factor: f32) -> Vec2 {
-        Vec2 {
-            x: self.x / factor,
-            y: self.y / factor,
-        }
-    }
-}
-
-impl Neg for Vec2 {
-    type Output = Vec2;
-
-    fn neg(self) -> Vec2 {
-        Vec2 {
-            x: -self.x,
-            y: -self.y,
         }
     }
 }
