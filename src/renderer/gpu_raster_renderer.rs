@@ -6,6 +6,7 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
+use crate::maths::vec3::Vec3;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -15,6 +16,7 @@ use wgpu::util::DeviceExt;
 
 /// There needs to be a maximum number of lights as we need fixed size arrays
 const MAX_LIGHTS: usize = 8;
+const SHADOW_MAP_GPU_SIZE: u32 = 512;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -54,12 +56,35 @@ struct GpuLightBlock {
     _pad: [u32; 3],
 }
 
+/// Per-draw-call uniforms for the depth-only shadow pass.
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct GpuShadowPassUniforms {
+    light_vp: [[f32; 4]; 4],
+    model: [[f32; 4]; 4],
+}
+
+/// One view-projection matrix per light, sent to the main shader for shadow lookups.
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct GpuShadowBlock {
+    light_vp: [[[f32; 4]; 4]; MAX_LIGHTS],
+}
+
+struct ShadowBindings<'a> {
+    view: &'a wgpu::TextureView,
+    sampler: &'a wgpu::Sampler,
+    block_buf: &'a wgpu::Buffer,
+}
+
 pub struct GpuRasterRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pipeline: wgpu::RenderPipeline,
     wireframe_pipeline: wgpu::RenderPipeline,
+    shadow_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
+    shadow_bind_group_layout: wgpu::BindGroupLayout,
     // RefCell needed because render_objects takes &self but we lazily initialise/resize this
     colour_texture: RefCell<Option<GpuFramebuffer>>,
     last_colour_view: RefCell<Option<wgpu::TextureView>>,
@@ -95,6 +120,60 @@ fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
     }
 }
 
+/// Builds a light view-projection matrix using the GPU depth convention (near→0, far→1).
+/// Mirrors the view-matrix layout of `Camera::view_matrix` for consistency.
+fn light_gpu_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
+    let pos = light.position();
+
+    let forward = if let Some(dir) = light.spot_direction() {
+        dir.normalise()
+    } else {
+        let to_origin = Vec3::ZERO - pos;
+        if to_origin.length() < 0.001 {
+            Vec3::new(0.0, -1.0, 0.0)
+        } else {
+            to_origin.normalise()
+        }
+    };
+
+    let up_hint = if forward.dot(Vec3::new(0.0, 1.0, 0.0)).abs() < 0.99 {
+        Vec3::new(0.0, 1.0, 0.0)
+    } else {
+        Vec3::new(1.0, 0.0, 0.0)
+    };
+
+    let r = up_hint.cross(forward).normalise();
+    let u = forward.cross(r).normalise();
+    let view = Mat4 {
+        m: [
+            [r.x, r.y, r.z, -r.dot(pos)],
+            [u.x, u.y, u.z, -u.dot(pos)],
+            [-forward.x, -forward.y, -forward.z, forward.dot(pos)],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    };
+
+    let fov = if light.spot_direction().is_some() {
+        ((light.cone_angle() + light.falloff_angle()) * 2.0).max(0.1)
+    } else {
+        std::f32::consts::FRAC_PI_2
+    };
+
+    // GPU-compatible perspective: maps near → 0, far → 1.
+    let f = 1.0 / (fov * 0.5).tan();
+    let nf = 1.0 / (near - far);
+    let proj = Mat4 {
+        m: [
+            [f, 0.0, 0.0, 0.0],
+            [0.0, f, 0.0, 0.0],
+            [0.0, 0.0, far * nf, far * near * nf],
+            [0.0, 0.0, -1.0, 0.0],
+        ],
+    };
+
+    proj * view
+}
+
 impl Default for GpuRasterRenderer {
     fn default() -> Self {
         Self::new()
@@ -107,7 +186,7 @@ impl GpuRasterRenderer {
         pollster::block_on(Self::init_async())
     }
 
-    /// Requests a high-performance adapter and device, then compiles both render pipelines.
+    /// Requests a high-performance adapter and device, then compiles all render pipelines.
     async fn init_async() -> Self {
         let instance = wgpu::Instance::default();
         let adapter = instance
@@ -131,15 +210,19 @@ impl GpuRasterRenderer {
         let queue = Arc::new(queue);
 
         let bind_group_layout = Self::create_bind_group_layout(&device);
+        let shadow_bind_group_layout = Self::create_shadow_bind_group_layout(&device);
         let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
         let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
+        let shadow_pipeline = Self::create_shadow_pipeline(&device, &shadow_bind_group_layout);
 
         Self {
             device,
             queue,
             pipeline,
             wireframe_pipeline,
+            shadow_pipeline,
             bind_group_layout,
+            shadow_bind_group_layout,
             colour_texture: RefCell::new(None),
             last_colour_view: RefCell::new(None),
         }
@@ -152,15 +235,19 @@ impl GpuRasterRenderer {
         let queue = display.shared_queue();
 
         let bind_group_layout = Self::create_bind_group_layout(&device);
+        let shadow_bind_group_layout = Self::create_shadow_bind_group_layout(&device);
         let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
         let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
+        let shadow_pipeline = Self::create_shadow_pipeline(&device, &shadow_bind_group_layout);
 
         Self {
             device,
             queue,
             pipeline,
             wireframe_pipeline,
+            shadow_pipeline,
             bind_group_layout,
+            shadow_bind_group_layout,
             colour_texture: RefCell::new(None),
             last_colour_view: RefCell::new(None),
         }
@@ -224,11 +311,12 @@ impl GpuRasterRenderer {
         }
     }
 
-    /// Creates the shared bind group layout used by both render pipelines.
+    /// Creates the shared bind group layout used by both main render pipelines.
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
+                // @binding(0) — per-object transform + camera uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -239,6 +327,7 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
+                // @binding(1) — scene lights
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -249,6 +338,7 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
+                // @binding(2) — material texture
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -259,13 +349,60 @@ impl GpuRasterRenderer {
                     },
                     count: None,
                 },
+                // @binding(3) — material sampler
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                // @binding(4) — shadow map depth array (one layer per light)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // @binding(5) — comparison sampler for PCF shadow lookups
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+                // @binding(6) — light view-projection matrices for shadow sampling
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
+        })
+    }
+
+    /// Bind group layout for the depth-only shadow pass: a single uniform with light VP + model.
+    fn create_shadow_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("shadow_bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
         })
     }
 
@@ -335,6 +472,59 @@ impl GpuRasterRenderer {
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
                 bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        })
+    }
+
+    /// Builds the depth-only pipeline used for shadow map rendering.
+    fn create_shadow_pipeline(
+        device: &wgpu::Device,
+        shadow_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::RenderPipeline {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("shadow_shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shadow.wgsl").into()),
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("shadow_pipeline_layout"),
+            bind_group_layouts: &[Some(shadow_bind_group_layout)],
+            immediate_size: 0,
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("shadow_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_shadow"),
+                // Reuse GpuVertex buffers; only position (@location 0) is read.
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: size_of::<GpuVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+                }],
+                compilation_options: Default::default(),
+            },
+            fragment: None, // depth-only — no colour output
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Cw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: Default::default(),
+                // Slope-scale bias prevents self-shadowing (shadow acne) without PCF.
+                bias: wgpu::DepthBiasState {
+                    constant: 2,
+                    slope_scale: 2.0,
+                    clamp: 0.0,
+                },
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -441,7 +631,7 @@ impl GpuRasterRenderer {
             let intensity = light.intensity();
             let (dir, cone, falloff) = match light.spot_direction() {
                 Some(d) => (d, light.cone_angle(), light.falloff_angle()),
-                None => (crate::maths::vec3::Vec3::ZERO, 0.0_f32, 0.0_f32),
+                None => (Vec3::ZERO, 0.0_f32, 0.0_f32),
             };
             block.lights[i] = GpuLight {
                 position: [p.x, p.y, p.z, intensity],
@@ -520,14 +710,14 @@ impl GpuRasterRenderer {
         (texture, view, sampler)
     }
 
-    /// Creates the bind group for a single draw call, wiring the uniform, light, texture, and
-    /// sampler buffers to their `@group(0) @binding(N)` slots in the shader.
+    /// Creates the bind group for a single draw call, wiring all seven bindings to their shader slots.
     fn build_bind_group(
         &self,
         uniform_buf: &wgpu::Buffer,
         light_buf: &wgpu::Buffer,
         tex_view: &wgpu::TextureView,
-        sampler: &wgpu::Sampler,
+        tex_sampler: &wgpu::Sampler,
+        shadow: &ShadowBindings<'_>,
     ) -> wgpu::BindGroup {
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("per_object_bg"),
@@ -547,14 +737,124 @@ impl GpuRasterRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Sampler(sampler),
+                    resource: wgpu::BindingResource::Sampler(tex_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(shadow.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::Sampler(shadow.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: shadow.block_buf.as_entire_binding(),
                 },
             ],
         })
     }
 
+    /// Creates a `Depth32Float` 2D-array texture with `MAX_LIGHTS` layers used for shadow maps.
+    /// Pass `size = 1` to produce a cheap dummy texture for wireframe / no-light rendering.
+    fn create_shadow_texture(&self, size: u32) -> wgpu::Texture {
+        self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("shadow_map_array"),
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: MAX_LIGHTS as u32,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        })
+    }
+
+    /// Encodes one depth-only render pass per light into `encoder`, writing results into the
+    /// corresponding layer of a `MAX_LIGHTS`-layer shadow texture array.
+    /// Returns the shadow texture and the `GpuShadowBlock` of light VP matrices for the shader.
+    fn build_shadow_maps(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        lights: &[Arc<dyn Light>],
+        objects: &[Object],
+        camera: &Camera,
+    ) -> (wgpu::Texture, GpuShadowBlock) {
+        let shadow_texture = self.create_shadow_texture(SHADOW_MAP_GPU_SIZE);
+        let mut shadow_block = GpuShadowBlock {
+            light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
+        };
+
+        for (light_idx, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
+            let lv_proj = light_gpu_view_proj(light.as_ref(), camera.near, camera.far);
+            shadow_block.light_vp[light_idx] = mat_to_gpu(lv_proj);
+
+            // View into this light's layer of the shadow texture array.
+            let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("shadow_layer_view"),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: light_idx as u32,
+                array_layer_count: Some(1),
+                ..Default::default()
+            });
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("shadow_pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &layer_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
+
+            pass.set_pipeline(&self.shadow_pipeline);
+
+            for obj in objects {
+                if obj.is_light {
+                    continue;
+                }
+                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
+                let (model, _) = obj.transform.matrices();
+                let shadow_uniforms = GpuShadowPassUniforms {
+                    light_vp: mat_to_gpu(lv_proj),
+                    model: mat_to_gpu(model),
+                };
+                let uniform_buf =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("shadow_pass_uniforms"),
+                            contents: bytemuck::bytes_of(&shadow_uniforms),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        });
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("shadow_pass_bg"),
+                    layout: &self.shadow_bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    }],
+                });
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.set_vertex_buffer(0, vbuf.slice(..));
+                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..index_count, 0, 0..1);
+            }
+        }
+
+        (shadow_texture, shadow_block)
+    }
+
     /// Internal render method shared by `render_objects` and `render_wireframe`.
-    /// When `wireframe` is true the wireframe pipeline is used and lights are ignored.
+    /// When `wireframe` is true the wireframe pipeline is used and lights/shadows are ignored.
     fn render_scene(
         &self,
         objects: &[Object],
@@ -596,6 +896,39 @@ impl GpuRasterRenderer {
         );
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
+
+        // Shadow pass: skip during wireframe, or when there are no lights.
+        let (shadow_texture, shadow_block) = if !wireframe && !lights.is_empty() {
+            self.build_shadow_maps(&mut encoder, lights, objects, camera)
+        } else {
+            // Dummy 1×1 texture — never sampled (no lights or wireframe mode).
+            (
+                self.create_shadow_texture(1),
+                GpuShadowBlock {
+                    light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
+                },
+            )
+        };
+
+        let shadow_array_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let shadow_comparison_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow_comparison_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+        let shadow_block_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("shadow_block"),
+                contents: bytemuck::bytes_of(&shadow_block),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -624,15 +957,24 @@ impl GpuRasterRenderer {
             for obj in objects {
                 let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
                 let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
-                let (_tex, tex_view, sampler) =
+                let (_tex, tex_view, tex_sampler) =
                     Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
                 let active_light_buf = if obj.is_light {
                     &empty_light_buf
                 } else {
                     &light_buf
                 };
-                let bind_group =
-                    self.build_bind_group(&uniform_buf, active_light_buf, &tex_view, &sampler);
+                let bind_group = self.build_bind_group(
+                    &uniform_buf,
+                    active_light_buf,
+                    &tex_view,
+                    &tex_sampler,
+                    &ShadowBindings {
+                        view: &shadow_array_view,
+                        sampler: &shadow_comparison_sampler,
+                        block_buf: &shadow_block_buf,
+                    },
+                );
 
                 pass.set_bind_group(0, &bind_group, &[]);
                 pass.set_vertex_buffer(0, vbuf.slice(..));
@@ -664,8 +1006,8 @@ impl GpuRasterRenderer {
 }
 
 impl super::Renderer for GpuRasterRenderer {
-    /// Renders all objects with Phong shading, copies the result from the GPU to the CPU
-    /// framebuffer, and returns triangle statistics.
+    /// Renders all objects with Phong shading and shadow maps, copies the result from the GPU
+    /// to the CPU framebuffer, and returns triangle statistics.
     fn render_objects(
         &self,
         objects: &[Object],
