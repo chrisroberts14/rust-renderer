@@ -1,9 +1,9 @@
 /// Single threaded version of the raster renderer. Used for testing and debugging,
 /// as it is not as performant as the multi-threaded version.
-use super::{prepare_render, rasterize_tile};
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
-use crate::renderer::draw_wireframe;
+use crate::renderer::prepare::prepare_render;
+use crate::renderer::rasterize::{draw_wireframe, rasterize_tile};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
