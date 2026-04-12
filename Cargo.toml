@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "macros/enum-iter-macro"]
+members = [".", "macros/*"]
 resolver = "2"
 
 [package]

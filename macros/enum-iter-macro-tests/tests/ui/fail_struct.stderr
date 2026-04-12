@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/ui/fail_struct.rs:3:10
+  |
+3 | #[derive(EnumIter)]
+  |          ^^^^^^^^
+  |
+  = help: message: EnumIter only works on enums

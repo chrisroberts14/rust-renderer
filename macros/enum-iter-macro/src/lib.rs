@@ -10,7 +10,7 @@ pub fn enum_iter_macro(input: TokenStream) -> TokenStream {
 
     let variants = match input.data {
         Data::Enum(data_enum) => data_enum.variants,
-        _ => panic!("MyEnumIter only works on enums"),
+        _ => panic!("EnumIter only works on enums"),
     };
 
     let variant_idents: Vec<_> = variants

@@ -1,0 +1,8 @@
+[package]
+name = "enum-iter-macro-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+enum-iter-macro = { path = "../enum-iter-macro" }
+trybuild = "1"
