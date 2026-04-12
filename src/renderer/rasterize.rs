@@ -8,6 +8,15 @@ use std::sync::Arc;
 
 use super::PreparedTriangle;
 use super::shade::shade;
+use super::shadow_map::ShadowMap;
+
+/// All shading inputs needed to light a fragment: lights, their shadow maps, and ambient level.
+/// Bundled to keep `rasterize_tile`'s argument count manageable.
+pub(crate) struct ShadingContext<'a> {
+    pub lights: &'a [Arc<dyn Light>],
+    pub shadow_maps: &'a [ShadowMap],
+    pub ambient: f32,
+}
 
 /// Rasterizes all triangles assigned to a tile, clamping pixel iteration to the tile bounds.
 pub(crate) fn rasterize_tile(
@@ -15,9 +24,8 @@ pub(crate) fn rasterize_tile(
     triangle_indices: &[usize],
     triangles: &[PreparedTriangle],
     camera: &Camera,
-    lights: &[Arc<dyn Light>],
+    shading: &ShadingContext<'_>,
     framebuffer: &Framebuffer,
-    ambient: f32,
 ) {
     let tile_min_x = tile.x as i32;
     let tile_min_y = tile.y as i32;
@@ -56,9 +64,19 @@ pub(crate) fn rasterize_tile(
                         let world_pos = v0.world * w0 + v1.world * w1 + v2.world * w2;
                         let view_dir = (camera.position - world_pos).normalise();
 
-                        let active_lights = if tri.is_light { &[] as &[_] } else { lights };
-                        let [lr, lg, lb] =
-                            shade(normal, world_pos, view_dir, active_lights, ambient);
+                        let (active_lights, active_shadows) = if tri.is_light {
+                            (&[] as &[_], &[] as &[_])
+                        } else {
+                            (shading.lights, shading.shadow_maps)
+                        };
+                        let [lr, lg, lb] = shade(
+                            normal,
+                            world_pos,
+                            view_dir,
+                            active_lights,
+                            active_shadows,
+                            shading.ambient,
+                        );
 
                         let [cr, cg, cb, ca] = match &tri.material {
                             Material::Color(c) => *c,

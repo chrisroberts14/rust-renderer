@@ -3,7 +3,8 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::prepare::prepare_render;
-use crate::renderer::rasterize::{draw_wireframe, rasterize_tile};
+use crate::renderer::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
+use crate::renderer::shadow_map::build_shadow_map;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
@@ -37,20 +38,22 @@ impl super::Renderer for SingleThreadRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
+        let shadow_maps: Vec<_> = lights
+            .iter()
+            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far))
+            .collect();
+
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
+        let shading = ShadingContext {
+            lights,
+            shadow_maps: &shadow_maps,
+            ambient,
+        };
         tiles
             .iter()
             .zip(bins.iter())
             .for_each(|(tile, tri_indices)| {
-                rasterize_tile(
-                    tile,
-                    tri_indices,
-                    &triangles,
-                    camera,
-                    lights,
-                    framebuffer,
-                    ambient,
-                );
+                rasterize_tile(tile, tri_indices, &triangles, camera, &shading, framebuffer);
             });
         vec![
             ("Triangle Count", triangles.len().to_string()),

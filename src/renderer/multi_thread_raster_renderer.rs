@@ -1,7 +1,7 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::prepare::prepare_render;
-use crate::renderer::rasterize::{draw_wireframe, rasterize_tile};
+use crate::renderer::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use rayon::prelude::*;
@@ -37,19 +37,16 @@ impl super::Renderer for MultiThreadRasterRenderer {
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
+        let shading = ShadingContext {
+            lights,
+            shadow_maps: &[],
+            ambient,
+        };
         tiles
             .par_iter()
             .zip(bins.par_iter())
             .for_each(|(tile, tri_indices)| {
-                rasterize_tile(
-                    tile,
-                    tri_indices,
-                    &triangles,
-                    camera,
-                    lights,
-                    framebuffer,
-                    ambient,
-                );
+                rasterize_tile(tile, tri_indices, &triangles, camera, &shading, framebuffer);
             });
         vec![
             ("Triangle Count", triangles.len().to_string()),

@@ -2,15 +2,19 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
 
+use super::shadow_map::ShadowMap;
+
 pub(super) const SHININESS: i32 = 32;
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).
+/// Shadow maps are indexed in parallel with `lights`; missing entries mean no shadow for that light.
 pub fn shade(
     normal: Vec3,
     world_pos: Vec3,
     view_dir: Vec3,
     lights: &[Arc<dyn Light>],
+    shadow_maps: &[ShadowMap],
     ambient: f32,
 ) -> [f32; 3] {
     if lights.is_empty() {
@@ -18,17 +22,21 @@ pub fn shade(
     }
     let mut diffuse_rgb = [0.0f32; 3];
     let mut specular_rgb = [0.0f32; 3];
-    for light in lights.iter() {
+    for (light_idx, light) in lights.iter().enumerate() {
+        let shadow = shadow_maps
+            .get(light_idx)
+            .map_or(1.0, |m| m.shadow_factor(world_pos));
+
         let light_colour = light.colour_at(world_pos);
         let light_dir = light.direction_to(world_pos);
 
         let ndotl = normal.dot(light_dir).max(0.0);
-        let diffuse = ndotl;
+        let diffuse = ndotl * shadow;
 
         let mut specular = 0.0;
         if ndotl > 0.0 {
             let reflect = normal * (2.0 * ndotl) - light_dir;
-            specular = reflect.dot(view_dir).max(0.0).powi(SHININESS);
+            specular = reflect.dot(view_dir).max(0.0).powi(SHININESS) * shadow;
         }
 
         for i in 0..3 {

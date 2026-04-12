@@ -4,6 +4,7 @@ pub mod multi_thread_raster_renderer;
 pub(crate) mod prepare;
 pub(crate) mod rasterize;
 mod shade;
+pub(crate) mod shadow_map;
 pub mod single_thread_raster_renderer;
 pub mod tile;
 

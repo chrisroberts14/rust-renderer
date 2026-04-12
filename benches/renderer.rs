@@ -117,7 +117,7 @@ fn bench_shade(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("shade");
     group.bench_function("shade", |b| {
-        b.iter(|| shade(normal, world_pos, view_dir, &lights, ambient))
+        b.iter(|| shade(normal, world_pos, view_dir, &lights, &[], ambient))
     });
 }
 
