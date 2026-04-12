@@ -40,7 +40,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
     ) -> Vec<(&'static str, String)> {
         let shadow_maps: Vec<_> = lights
             .iter()
-            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far))
+            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far, 128))
             .collect();
 
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);

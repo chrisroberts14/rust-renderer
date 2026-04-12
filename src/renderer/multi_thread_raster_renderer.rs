@@ -2,6 +2,7 @@ use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::prepare::prepare_render;
 use crate::renderer::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
+use crate::renderer::shadow_map::build_shadow_map;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use rayon::prelude::*;
@@ -36,10 +37,15 @@ impl super::Renderer for MultiThreadRasterRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
+        let shadow_maps: Vec<_> = lights
+            .iter()
+            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far, 512))
+            .collect();
+
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
         let shading = ShadingContext {
             lights,
-            shadow_maps: &[],
+            shadow_maps: &shadow_maps,
             ambient,
         };
         tiles
