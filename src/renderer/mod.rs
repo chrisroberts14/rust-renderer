@@ -17,6 +17,7 @@ use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use clap::ValueEnum;
+use enum_iter_macro::EnumIter;
 use std::fmt;
 use std::sync::Arc;
 use strum_macros::Display;
@@ -26,7 +27,7 @@ const SHININESS: i32 = 32;
 
 /// CLI argument type for selecting an initial renderer.
 /// Once a renderer is implemented it will need to be "registered" here.
-#[derive(Clone, ValueEnum, Display, PartialEq)]
+#[derive(Clone, ValueEnum, Display, PartialEq, EnumIter)]
 pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
@@ -59,15 +60,21 @@ pub enum ActiveRenderer {
 }
 
 impl ActiveRenderer {
+    fn as_choice(&self) -> RendererChoice {
+        match self {
+            Self::SingleThreadRaster(_) => RendererChoice::SingleThreadRaster,
+            Self::MultiThreadRaster(_) => RendererChoice::MultiThreadRaster,
+            Self::Gpu(_) => RendererChoice::Gpu,
+        }
+    }
+
     /// Cycles to the next renderer in the sequence, replacing the current one in place.
+    /// Order follows [`RendererChoice::iter`], so new variants slot in automatically.
     pub fn next(&mut self) {
-        *self = match self {
-            Self::SingleThreadRaster(_) => {
-                Self::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
-            }
-            Self::MultiThreadRaster(_) => Self::Gpu(Box::default()),
-            Self::Gpu(_) => Self::SingleThreadRaster(Box::new(SingleThreadRasterRenderer::new(32))),
-        };
+        let choices: Vec<_> = RendererChoice::iter().collect();
+        let current = self.as_choice();
+        let idx = choices.iter().position(|c| c == &current).unwrap_or(0);
+        *self = choices[(idx + 1) % choices.len()].clone().into_active();
     }
 
     /// Returns the GPU colour texture view from the most recent render, or `None` for CPU renderers.
