@@ -40,19 +40,15 @@ impl Vec3 {
     }
 
     pub fn length(&self) -> f32 {
-        f32::sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+        self.dot(*self).sqrt()
     }
 
     pub fn normalise(&self) -> Vec3 {
         let len = self.length();
-        if len == 0.0 {
+        if len < 1e-8 {
             return Vec3::ZERO;
         }
-        Vec3 {
-            x: self.x / len,
-            y: self.y / len,
-            z: self.z / len,
-        }
+        *self / len
     }
 
     pub fn project_to_2d(&self, width: usize, height: usize) -> Vec2 {
@@ -61,7 +57,6 @@ impl Vec3 {
         Vec2::new(x as f32, y as f32)
     }
 
-    // Rotate around X axis
     pub fn rotate_x(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
@@ -72,7 +67,6 @@ impl Vec3 {
         }
     }
 
-    // Rotate around Y axis
     pub fn rotate_y(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
@@ -83,7 +77,6 @@ impl Vec3 {
         }
     }
 
-    // Rotate around Z axis
     pub fn rotate_z(&self, angle_rad: f32) -> Vec3 {
         let cos = angle_rad.cos();
         let sin = angle_rad.sin();
@@ -95,15 +88,10 @@ impl Vec3 {
     }
 
     pub fn to_vec4(self) -> Vec4 {
-        Vec4 {
-            x: self.x,
-            y: self.y,
-            z: self.z,
-            w: 1.0,
-        }
+        Vec4::from_vec3(self, 1.0)
     }
 
-    /// Compute the vector which contains the minimums of each value in two different vectors
+    /// Component-wise minimum.
     pub fn min(&self, other: Vec3) -> Vec3 {
         Vec3::new(
             self.x.min(other.x),
@@ -112,7 +100,7 @@ impl Vec3 {
         )
     }
 
-    /// Compute the vector which contains the maximums of each value in two different vectors
+    /// Component-wise maximum.
     pub fn max(&self, other: Vec3) -> Vec3 {
         Vec3::new(
             self.x.max(other.x),

@@ -14,15 +14,11 @@ impl Vec2 {
     }
 
     pub fn length(&self) -> f32 {
-        f32::sqrt(self.x * self.x + self.y * self.y)
+        self.dot(*self).sqrt()
     }
 
     pub fn normalise(&self) -> Vec2 {
-        let len = self.length();
-        Vec2 {
-            x: self.x / len,
-            y: self.y / len,
-        }
+        *self / self.length()
     }
 }
 

@@ -233,9 +233,9 @@ impl Mul<Mat4> for Mat4 {
     fn mul(self, rhs: Mat4) -> Mat4 {
         let mut result = [[0.0; 4]; 4];
 
-        for (row_index, row) in self.m.iter().enumerate() {
-            for (col_index, _) in row.iter().enumerate() {
-                result[row_index][col_index] = self.m[row_index][0] * rhs.m[0][col_index]
+        for (row_index, row) in result.iter_mut().enumerate() {
+            for (col_index, cell) in row.iter_mut().enumerate() {
+                *cell = self.m[row_index][0] * rhs.m[0][col_index]
                     + self.m[row_index][1] * rhs.m[1][col_index]
                     + self.m[row_index][2] * rhs.m[2][col_index]
                     + self.m[row_index][3] * rhs.m[3][col_index];
