@@ -22,46 +22,40 @@ use std::sync::Arc;
 use winit::window::CursorGrabMode;
 
 struct Window {
-    window: Option<Arc<dyn winit::window::Window>>,
+    window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
 }
 
 impl Window {
     fn new(window: Arc<dyn winit::window::Window>) -> Self {
         Self {
-            window: Some(window),
+            window,
             cursor_grabbed: false,
         }
     }
 
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = &self.window {
-            window.set_cursor_visible(false);
-            if window.set_cursor_grab(CursorGrabMode::Confined).is_err() {
-                window.set_cursor_grab(CursorGrabMode::Locked)?;
-            }
-            self.cursor_grabbed = true;
-            Ok(())
-        } else {
-            Err("Window not initialized".into())
+        self.window.set_cursor_visible(false);
+        if self
+            .window
+            .set_cursor_grab(CursorGrabMode::Confined)
+            .is_err()
+        {
+            self.window.set_cursor_grab(CursorGrabMode::Locked)?;
         }
+        self.cursor_grabbed = true;
+        Ok(())
     }
 
     fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = &self.window {
-            window.set_cursor_visible(true);
-            window.set_cursor_grab(CursorGrabMode::None)?;
-            self.cursor_grabbed = false;
-            Ok(())
-        } else {
-            Err("Window not initialized".into())
-        }
+        self.window.set_cursor_visible(true);
+        self.window.set_cursor_grab(CursorGrabMode::None)?;
+        self.cursor_grabbed = false;
+        Ok(())
     }
 
     fn request_redraw(&self) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        self.window.request_redraw();
     }
 
     fn is_cursor_grabbed(&self) -> bool {
@@ -71,15 +65,12 @@ impl Window {
 
 pub struct DisplaySurface<'window> {
     /// The window is managed here which ensures it lives at least as long as the surface
-    window: Option<Window>,
-    /// The wgpu instance used to create the surface and adapter.
+    window: Window,
     pub instance: wgpu::Instance,
-    /// The wgpu surface backed by the winit window.
     pub surface: wgpu::Surface<'window>,
     /// Shared with [`GpuRasterRenderer`](crate::renderer::gpu_raster_renderer::GpuRasterRenderer)
     /// so that GPU-rendered textures can be presented without crossing device boundaries.
     pub device: Arc<wgpu::Device>,
-    /// Shared queue — see `device` above.
     pub queue: Arc<wgpu::Queue>,
     /// Swap-chain format selected at init time (non-sRGB preferred).
     pub surface_format: wgpu::TextureFormat,
@@ -91,8 +82,8 @@ pub struct DisplaySurface<'window> {
     bind_group_layout: wgpu::BindGroupLayout,
     /// Staging texture for CPU-side pixel data (CPU renderer output or overlay bytes).
     cpu_texture: wgpu::Texture,
-    /// Permanent 1×1 fully-transparent texture used as the overlay when none is provided.
-    null_overlay: wgpu::Texture,
+    /// Permanent 1×1 fully-transparent texture view used as the overlay when none is provided.
+    null_overlay_view: wgpu::TextureView,
     /// Nearest-neighbour sampler used by the blit pass.
     sampler: wgpu::Sampler,
 }
@@ -152,7 +143,6 @@ impl<'window> DisplaySurface<'window> {
         };
         surface.configure(&device, &config);
 
-        // Closure to reduce repetition for the two identical texture binding entries.
         let tex_entry = |binding| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -215,21 +205,7 @@ impl<'window> DisplaySurface<'window> {
             cache: None,
         });
 
-        // 1×1 transparent texture bound as the overlay when the caller passes None.
-        let null_overlay = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("null_overlay"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+        let null_overlay = Self::create_rgba8_texture(&device, "null_overlay", 1, 1);
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &null_overlay,
@@ -249,17 +225,23 @@ impl<'window> DisplaySurface<'window> {
                 depth_or_array_layers: 1,
             },
         );
+        let null_overlay_view = null_overlay.create_view(&Default::default());
 
         Self {
-            window: Some(Window::new(window)),
-            cpu_texture: Self::create_cpu_texture(&device, width as u32, height as u32),
+            window: Window::new(window),
+            cpu_texture: Self::create_rgba8_texture(
+                &device,
+                "cpu_framebuffer",
+                width as u32,
+                height as u32,
+            ),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 mag_filter: wgpu::FilterMode::Nearest,
                 min_filter: wgpu::FilterMode::Nearest,
                 ..Default::default()
             }),
             blit_pipeline,
-            null_overlay,
+            null_overlay_view,
             instance,
             surface,
             device: Arc::new(device),
@@ -275,7 +257,8 @@ impl<'window> DisplaySurface<'window> {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
-        self.cpu_texture = Self::create_cpu_texture(&self.device, width, height);
+        self.cpu_texture =
+            Self::create_rgba8_texture(&self.device, "cpu_framebuffer", width, height);
     }
 
     /// Uploads raw RGBA bytes from the CPU framebuffer and blits them to the surface.
@@ -298,12 +281,11 @@ impl<'window> DisplaySurface<'window> {
         };
         let surface_view = surface_texture.texture.create_view(&Default::default());
 
-        let overlay_view = if let Some(overlay) = overlay_bytes {
+        let cpu_overlay_view = overlay_bytes.map(|overlay| {
             self.upload_to_cpu_texture(overlay);
             self.cpu_texture.create_view(&Default::default())
-        } else {
-            self.null_overlay.create_view(&Default::default())
-        };
+        });
+        let overlay_view = cpu_overlay_view.as_ref().unwrap_or(&self.null_overlay_view);
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -315,7 +297,7 @@ impl<'window> DisplaySurface<'window> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&overlay_view),
+                    resource: wgpu::BindingResource::TextureView(overlay_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -353,9 +335,14 @@ impl<'window> DisplaySurface<'window> {
         Arc::clone(&self.queue)
     }
 
-    fn create_cpu_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
+    fn create_rgba8_texture(
+        device: &wgpu::Device,
+        label: &str,
+        width: u32,
+        height: u32,
+    ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("cpu_framebuffer"),
+            label: Some(label),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -393,18 +380,18 @@ impl<'window> DisplaySurface<'window> {
     }
 
     pub fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.as_mut().unwrap().release_mouse()
+        self.window.release_mouse()
     }
 
     pub fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.as_mut().unwrap().capture_mouse()
+        self.window.capture_mouse()
     }
 
     pub fn request_redraw(&self) {
-        self.window.as_ref().unwrap().request_redraw();
+        self.window.request_redraw();
     }
 
     pub fn is_cursor_grabbed(&self) -> bool {
-        self.window.as_ref().unwrap().is_cursor_grabbed()
+        self.window.is_cursor_grabbed()
     }
 }
