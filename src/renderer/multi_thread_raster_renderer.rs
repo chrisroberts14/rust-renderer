@@ -8,6 +8,8 @@ use crate::scenes::lights::Light;
 use rayon::prelude::*;
 use std::sync::Arc;
 
+const SHADOW_MAP_SIZE: usize = 512;
+
 pub struct MultiThreadRasterRenderer {
     tile_size: usize,
 }
@@ -39,7 +41,15 @@ impl super::Renderer for MultiThreadRasterRenderer {
     ) -> Vec<(&'static str, String)> {
         let shadow_maps: Vec<_> = lights
             .iter()
-            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far, 512))
+            .map(|light| {
+                build_shadow_map(
+                    light.as_ref(),
+                    objects,
+                    camera.near,
+                    camera.far,
+                    SHADOW_MAP_SIZE,
+                )
+            })
             .collect();
 
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);

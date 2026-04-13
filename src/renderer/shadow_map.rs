@@ -70,11 +70,12 @@ impl ShadowMap {
     }
 }
 
-/// Builds the view-projection matrix for a light's shadow pass.
+/// Builds a view matrix and FOV for a light's shadow pass, shared by both the CPU and GPU renderers.
 ///
 /// Uses the same view-matrix layout as [`Camera::view_matrix`] so that NDC conventions
-/// (near=-1, far=+1; Y up) are consistent between the shadow pass and the sample lookup.
-fn light_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
+/// (Y up) are consistent between the shadow pass and the sample lookup.
+/// Returns `(view_matrix, fov_radians)`.
+pub(super) fn light_view_and_fov(light: &dyn Light) -> (Mat4, f32) {
     let pos = light.position();
 
     let forward = if let Some(dir) = light.spot_direction() {
@@ -116,6 +117,11 @@ fn light_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
         std::f32::consts::FRAC_PI_2
     };
 
+    (view, fov)
+}
+
+fn light_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
+    let (view, fov) = light_view_and_fov(light);
     let proj = Mat4::perspective(fov, 1.0, near, far);
     proj * view
 }
@@ -144,9 +150,8 @@ pub fn build_shadow_map(
             let w1 = (model * obj.mesh.vertices[i1].to_vec4()).to_vec3();
             let w2 = (model * obj.mesh.vertices[i2].to_vec4()).to_vec3();
 
-            // Project a world-space vertex into shadow map screen space.
-            // Returns None if the vertex is behind the light, outside the depth range, or outside
-            // the x/y frustum — keeping bounding boxes tight and avoiding full-map iterations.
+            // Returns None for vertices behind the light, outside depth range, or outside the x/y
+            // frustum — keeps bounding boxes tight and avoids full-map iterations.
             let project = |world: Vec3| -> Option<(Vec2, f32)> {
                 let clip = lv_proj * world.to_vec4();
                 if clip.w <= 0.0 {

@@ -7,6 +7,7 @@ use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
+use crate::renderer::shadow_map::light_view_and_fov;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -107,70 +108,26 @@ fn mat_to_gpu(m: Mat4) -> [[f32; 4]; 4] {
 /// Camera::projection_matrix() uses OpenGL convention (near→−1, far→+1), which causes
 /// the near half of the frustum to have z_clip < 0 and be hardware-clipped by wgpu.
 /// This matrix maps near→0, far→1 instead.
-fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
-    let f = 1.0 / (camera.fov * 0.5).tan();
-    let nf = 1.0 / (camera.near - camera.far);
+fn gpu_perspective(fov: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
+    let f = 1.0 / (fov * 0.5).tan();
+    let nf = 1.0 / (near - far);
     Mat4 {
         m: [
-            [f / camera.aspect_ratio, 0.0, 0.0, 0.0],
+            [f / aspect, 0.0, 0.0, 0.0],
             [0.0, f, 0.0, 0.0],
-            [0.0, 0.0, camera.far * nf, camera.far * camera.near * nf],
+            [0.0, 0.0, far * nf, far * near * nf],
             [0.0, 0.0, -1.0, 0.0],
         ],
     }
 }
 
-/// Builds a light view-projection matrix using the GPU depth convention (near→0, far→1).
-/// Mirrors the view-matrix layout of `Camera::view_matrix` for consistency.
+fn gpu_projection_matrix(camera: &Camera) -> Mat4 {
+    gpu_perspective(camera.fov, camera.aspect_ratio, camera.near, camera.far)
+}
+
 fn light_gpu_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
-    let pos = light.position();
-
-    let forward = if let Some(dir) = light.spot_direction() {
-        dir.normalise()
-    } else {
-        let to_origin = Vec3::ZERO - pos;
-        if to_origin.length() < 0.001 {
-            Vec3::new(0.0, -1.0, 0.0)
-        } else {
-            to_origin.normalise()
-        }
-    };
-
-    let up_hint = if forward.dot(Vec3::new(0.0, 1.0, 0.0)).abs() < 0.99 {
-        Vec3::new(0.0, 1.0, 0.0)
-    } else {
-        Vec3::new(1.0, 0.0, 0.0)
-    };
-
-    let r = up_hint.cross(forward).normalise();
-    let u = forward.cross(r).normalise();
-    let view = Mat4 {
-        m: [
-            [r.x, r.y, r.z, -r.dot(pos)],
-            [u.x, u.y, u.z, -u.dot(pos)],
-            [-forward.x, -forward.y, -forward.z, forward.dot(pos)],
-            [0.0, 0.0, 0.0, 1.0],
-        ],
-    };
-
-    let fov = if light.spot_direction().is_some() {
-        ((light.cone_angle() + light.falloff_angle()) * 2.0).max(0.1)
-    } else {
-        std::f32::consts::FRAC_PI_2
-    };
-
-    // GPU-compatible perspective: maps near → 0, far → 1.
-    let f = 1.0 / (fov * 0.5).tan();
-    let nf = 1.0 / (near - far);
-    let proj = Mat4 {
-        m: [
-            [f, 0.0, 0.0, 0.0],
-            [0.0, f, 0.0, 0.0],
-            [0.0, 0.0, far * nf, far * near * nf],
-            [0.0, 0.0, -1.0, 0.0],
-        ],
-    };
-
+    let (view, fov) = light_view_and_fov(light);
+    let proj = gpu_perspective(fov, 1.0, near, far);
     proj * view
 }
 
@@ -647,9 +604,9 @@ impl GpuRasterRenderer {
         })
     }
 
-    /// Uploads the object's material as a GPU texture. For `Material::Color` a 1×1 texture is
-    /// created; for `Material::Texture` the full image is rasterised row-by-row and uploaded.
-    fn get_or_create_texture(
+    /// Uploads the object's material as a new GPU texture every call. For `Material::Color` a 1×1
+    /// texture is created; for `Material::Texture` the full image is rasterised row-by-row and uploaded.
+    fn upload_material_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         material: &Material,
@@ -958,7 +915,7 @@ impl GpuRasterRenderer {
                 let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
                 let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
                 let (_tex, tex_view, tex_sampler) =
-                    Self::get_or_create_texture(&self.device, &self.queue, &obj.material);
+                    Self::upload_material_texture(&self.device, &self.queue, &obj.material);
                 let active_light_buf = if obj.is_light {
                     &empty_light_buf
                 } else {

@@ -38,7 +38,6 @@ pub(crate) fn rasterize_tile(
         let [z0, z1, z2] = tri.depths;
         let [v0, v1, v2] = tri.verts;
 
-        // Screen-space triangle used for bounding box and point containment tests.
         let screen_tri = Triangle::screen_triangle(p0, p1, p2);
 
         // Clamp rasterization bounds to the tile (already backface-culled in prepare_object).

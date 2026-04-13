@@ -9,6 +9,9 @@ use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
 
+// Smaller than the multi-threaded renderer's map for faster single-core debug builds.
+const SHADOW_MAP_SIZE: usize = 128;
+
 pub struct SingleThreadRasterRenderer {
     tile_size: usize,
 }
@@ -40,7 +43,15 @@ impl super::Renderer for SingleThreadRasterRenderer {
     ) -> Vec<(&'static str, String)> {
         let shadow_maps: Vec<_> = lights
             .iter()
-            .map(|light| build_shadow_map(light.as_ref(), objects, camera.near, camera.far, 128))
+            .map(|light| {
+                build_shadow_map(
+                    light.as_ref(),
+                    objects,
+                    camera.near,
+                    camera.far,
+                    SHADOW_MAP_SIZE,
+                )
+            })
             .collect();
 
         let (triangles, tiles, bins) = prepare_render(objects, camera, framebuffer, self.tile_size);
