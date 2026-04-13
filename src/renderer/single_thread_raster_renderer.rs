@@ -14,11 +14,20 @@ const SHADOW_MAP_SIZE: usize = 128;
 
 pub struct SingleThreadRasterRenderer {
     tile_size: usize,
+    shadow_map_size: usize,
 }
 
 impl SingleThreadRasterRenderer {
     pub fn new(tile_size: usize) -> Self {
-        Self { tile_size }
+        Self {
+            tile_size,
+            shadow_map_size: SHADOW_MAP_SIZE,
+        }
+    }
+
+    pub fn with_shadow_map_size(mut self, size: usize) -> Self {
+        self.shadow_map_size = size;
+        self
     }
 
     pub fn increase_tile_count(&mut self, delta: usize) {
@@ -49,7 +58,7 @@ impl super::Renderer for SingleThreadRasterRenderer {
                     objects,
                     camera.near,
                     camera.far,
-                    SHADOW_MAP_SIZE,
+                    self.shadow_map_size,
                 )
             })
             .collect();

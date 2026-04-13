@@ -115,8 +115,8 @@ mod tests {
         /// We don't check the GPU renderer here as it may legitimately disagree
         #[test]
         fn cpu_renderers_produce_identical_output(mut scene in scene()) {
-            let single = SingleThreadRasterRenderer::new(32);
-            let multi = MultiThreadRasterRenderer::new(32);
+            let single = SingleThreadRasterRenderer::new(32).with_shadow_map_size(128);
+            let multi = MultiThreadRasterRenderer::new(32).with_shadow_map_size(128);
 
             scene.render_scene(&single);
             let single_pixels = scene.framebuffer.as_bytes().to_vec();
