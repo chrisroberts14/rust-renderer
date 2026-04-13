@@ -37,7 +37,9 @@ impl Window {
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(window) = &self.window {
             window.set_cursor_visible(false);
-            window.set_cursor_grab(CursorGrabMode::Confined)?;
+            if window.set_cursor_grab(CursorGrabMode::Confined).is_err() {
+                window.set_cursor_grab(CursorGrabMode::Locked)?;
+            }
             self.cursor_grabbed = true;
             Ok(())
         } else {
