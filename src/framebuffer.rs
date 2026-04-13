@@ -5,7 +5,10 @@ use crate::scenes::texture::Texture;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-/// A structure representing a framebuffer with a specified width, height, and pixel data.
+const INFINITY_BITS: u32 = f32::INFINITY.to_bits();
+const COLOR_WHITE: [u8; 4] = [255, 255, 255, 255];
+const COLOR_BLACK: [u8; 4] = [0, 0, 0, 255];
+
 #[derive(Default, Debug)]
 pub struct Framebuffer {
     pub width: usize,
@@ -14,7 +17,7 @@ pub struct Framebuffer {
     depth: Vec<AtomicU32>,
 }
 
-/// Custom clone for framebuffer so we can copy scenes
+/// Custom clone so we can copy scenes
 impl Clone for Framebuffer {
     fn clone(&self) -> Self {
         Self {
@@ -35,43 +38,36 @@ impl Clone for Framebuffer {
 }
 
 impl Framebuffer {
-    /// Create a new frame buffer with the given width and height, initializing the pixel data to zero.
     pub fn new(width: usize, height: usize) -> Self {
+        let n = width * height;
         Self {
             width,
             height,
-            pixels: (0..width * height).map(|_| AtomicU32::new(0)).collect(),
-            depth: (0..width * height)
-                .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
-                .collect(),
+            pixels: (0..n).map(|_| AtomicU32::new(0)).collect(),
+            depth: (0..n).map(|_| AtomicU32::new(INFINITY_BITS)).collect(),
         }
     }
 
-    /// Set a single pixel
     pub fn set_pixel(&self, x: usize, y: usize, color: [u8; 4]) {
-        if x >= self.width || y >= self.height {
-            return; // silently ignore out-of-bounds
+        if !self.in_bounds(x, y) {
+            return;
         }
-        let idx = y * self.width + x;
-        self.pixels[idx].store(u32::from_ne_bytes(color), Ordering::Relaxed);
+        self.pixels[self.pixel_idx(x, y)].store(u32::from_ne_bytes(color), Ordering::Relaxed);
     }
 
-    /// Clear the framebuffer to be all black
     pub fn clear(&self) {
-        let packed = u32::from_ne_bytes([0, 0, 0, 255]);
-        for p in &self.pixels {
+        let packed = u32::from_ne_bytes(COLOR_BLACK);
+        for (p, d) in self.pixels.iter().zip(self.depth.iter()) {
             p.store(packed, Ordering::Relaxed);
-        }
-        for d in &self.depth {
-            d.store(f32::INFINITY.to_bits(), Ordering::Relaxed);
+            d.store(INFINITY_BITS, Ordering::Relaxed);
         }
     }
 
     pub fn test_and_set_depth(&self, x: usize, y: usize, depth: f32) -> bool {
-        if x >= self.width || y >= self.height {
+        if !self.in_bounds(x, y) {
             return false;
         }
-        let idx = y * self.width + x;
+        let idx = self.pixel_idx(x, y);
         let depth_bits = depth.to_bits();
         let mut current = self.depth[idx].load(Ordering::Relaxed);
         loop {
@@ -90,7 +86,6 @@ impl Framebuffer {
         }
     }
 
-    /// Returns the pixel data as a flat byte slice.
     /// Safe because AtomicU32 has the same layout as u32, and we pack pixels as from_ne_bytes.
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
@@ -99,22 +94,10 @@ impl Framebuffer {
     }
 
     pub fn resize(&mut self, new_width: usize, new_height: usize) {
-        self.width = new_width;
-        self.height = new_height;
-        self.pixels = (0..new_width * new_height)
-            .map(|_| AtomicU32::new(0))
-            .collect();
-        self.depth = (0..new_width * new_height)
-            .map(|_| AtomicU32::new(f32::INFINITY.to_bits()))
-            .collect();
+        *self = Self::new(new_width, new_height);
     }
 
-    pub fn draw_line(&self, x0: i32, y0: i32, x1: i32, y1: i32) {
-        let mut x0 = x0;
-        let mut y0 = y0;
-        let mut x1 = x1;
-        let mut y1 = y1;
-
+    pub fn draw_line(&self, mut x0: i32, mut y0: i32, mut x1: i32, mut y1: i32) {
         let steep = (y1 - y0).abs() > (x1 - x0).abs();
         if steep {
             std::mem::swap(&mut x0, &mut y0);
@@ -134,9 +117,9 @@ impl Framebuffer {
 
         for x in x0..=x1 {
             if steep {
-                self.set_pixel(y as usize, x as usize, [255, 255, 255, 255]);
+                self.set_pixel(y as usize, x as usize, COLOR_WHITE);
             } else {
-                self.set_pixel(x as usize, y as usize, [255, 255, 255, 255]);
+                self.set_pixel(x as usize, y as usize, COLOR_WHITE);
             }
             error -= dy;
             if error < 0 {
@@ -168,7 +151,6 @@ impl Framebuffer {
             let ray_y = ndc_y * tan_half_fov;
             for x in 0..self.width {
                 let ndc_x = (x as f32 + 0.5) / self.width as f32 * 2.0 - 1.0;
-
                 let ray_x = ndc_x * camera.aspect_ratio * tan_half_fov;
 
                 // Build view-space ray and rotate into world space using camera axes
@@ -183,5 +165,15 @@ impl Framebuffer {
                 self.set_pixel(x, y, color);
             }
         });
+    }
+
+    #[inline]
+    fn in_bounds(&self, x: usize, y: usize) -> bool {
+        x < self.width && y < self.height
+    }
+
+    #[inline]
+    fn pixel_idx(&self, x: usize, y: usize) -> usize {
+        y * self.width + x
     }
 }
