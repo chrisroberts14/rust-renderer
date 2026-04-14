@@ -15,8 +15,8 @@ pub struct UpdateThread {
     running: Arc<AtomicBool>,
 }
 
-/// This custom clone implementation doesn't actually copy anything it solely is used for simplicity
-/// in benchmarks
+/// Clones the running flag but drops the join handle — used in benchmarks that need a shared
+/// stop signal without taking ownership of the thread.
 impl Clone for UpdateThread {
     fn clone(&self) -> Self {
         Self {
@@ -70,8 +70,9 @@ fn spawn_update_thread_for(
     let handle = thread::spawn(move || {
         let mut last_tick = Instant::now();
         while thread_running.load(Ordering::Relaxed) {
-            let dt = last_tick.elapsed().as_secs_f32();
-            last_tick = Instant::now();
+            let now = Instant::now();
+            let dt = (now - last_tick).as_secs_f32();
+            last_tick = now;
             {
                 let mut objs = objects.write().unwrap_or_else(|e| e.into_inner());
                 for object in objs.iter_mut() {

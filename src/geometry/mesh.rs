@@ -31,37 +31,32 @@ impl Mesh {
     }
 
     fn compute_aabb(vertices: &[Vec3]) -> Option<(Vec3, Vec3)> {
-        if vertices.is_empty() {
-            return None;
-        }
-
-        let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
-        let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
-
-        for &v in vertices {
+        let (&first, rest) = vertices.split_first()?;
+        let mut min = first;
+        let mut max = first;
+        for &v in rest {
             min = min.min(v);
             max = max.max(v);
         }
-
         Some((min, max))
     }
 
     fn compute_vertex_normals(vertices: &[Vec3], faces: &[(usize, usize, usize)]) -> Vec<Vec3> {
         let mut normals = vec![Vec3::ZERO; vertices.len()];
 
-        for (i0, i1, i2) in faces {
-            let v0 = vertices[*i0];
-            let v1 = vertices[*i1];
-            let v2 = vertices[*i2];
+        for &(i0, i1, i2) in faces {
+            let v0 = vertices[i0];
+            let v1 = vertices[i1];
+            let v2 = vertices[i2];
 
             let edge1 = v1 - v0;
             let edge2 = v2 - v0;
 
             let face_normal = edge1.cross(edge2).normalise();
 
-            normals[*i0] = normals[*i0] + face_normal;
-            normals[*i1] = normals[*i1] + face_normal;
-            normals[*i2] = normals[*i2] + face_normal;
+            normals[i0] = normals[i0] + face_normal;
+            normals[i1] = normals[i1] + face_normal;
+            normals[i2] = normals[i2] + face_normal;
         }
 
         for n in &mut normals {

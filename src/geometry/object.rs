@@ -38,6 +38,12 @@ impl Debug for Object {
     }
 }
 
+const GRAVITY: Vec3 = Vec3 {
+    x: 0.0,
+    y: -9.81,
+    z: 0.0,
+};
+
 impl Object {
     pub fn new(mesh: Mesh, transform: Transform, material: Material) -> Self {
         Self {
@@ -46,7 +52,7 @@ impl Object {
             material,
             is_light: false,
             animation: None,
-            velocity: Vec3::new(0.0, 0.0, 0.0),
+            velocity: Vec3::ZERO,
             mass: 1.0,
             is_static: false,
             collision_shape: CollisionShape::Aabb,
@@ -88,11 +94,6 @@ impl Object {
         }
 
         if !self.is_static {
-            const GRAVITY: Vec3 = Vec3 {
-                x: 0.0,
-                y: -9.81,
-                z: 0.0,
-            };
             self.velocity = self.velocity + GRAVITY * dt;
             self.transform.position = self.transform.position + self.velocity * dt;
         }
@@ -137,7 +138,6 @@ impl Object {
         Some((center - half, center + half))
     }
 
-    /// Function to determine if a given point falls within the bounding box of the object
     pub(crate) fn is_within_bounding_box(&self, point: &Vec3) -> bool {
         let Some((min, max)) = self.bounding_box() else {
             return false;
