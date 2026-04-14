@@ -82,8 +82,8 @@ pub struct DisplaySurface<'window> {
     bind_group_layout: wgpu::BindGroupLayout,
     /// Staging texture for CPU-side pixel data (CPU renderer output or overlay bytes).
     cpu_texture: wgpu::Texture,
-    /// Permanent 1×1 fully-transparent texture view used as the overlay when none is provided.
-    null_overlay_view: wgpu::TextureView,
+    /// Permanent 1×1 fully-transparent texture bound as the overlay when none is provided.
+    null_overlay: wgpu::Texture,
     /// Nearest-neighbour sampler used by the blit pass.
     sampler: wgpu::Sampler,
 }
@@ -225,8 +225,6 @@ impl<'window> DisplaySurface<'window> {
                 depth_or_array_layers: 1,
             },
         );
-        let null_overlay_view = null_overlay.create_view(&Default::default());
-
         Self {
             window: Window::new(window),
             cpu_texture: Self::create_rgba8_texture(
@@ -241,7 +239,7 @@ impl<'window> DisplaySurface<'window> {
                 ..Default::default()
             }),
             blit_pipeline,
-            null_overlay_view,
+            null_overlay,
             instance,
             surface,
             device: Arc::new(device),
@@ -281,11 +279,13 @@ impl<'window> DisplaySurface<'window> {
         };
         let surface_view = surface_texture.texture.create_view(&Default::default());
 
-        let cpu_overlay_view = overlay_bytes.map(|overlay| {
-            self.upload_to_cpu_texture(overlay);
-            self.cpu_texture.create_view(&Default::default())
-        });
-        let overlay_view = cpu_overlay_view.as_ref().unwrap_or(&self.null_overlay_view);
+        let overlay_view = match overlay_bytes {
+            Some(overlay) => {
+                self.upload_to_cpu_texture(overlay);
+                self.cpu_texture.create_view(&Default::default())
+            }
+            None => self.null_overlay.create_view(&Default::default()),
+        };
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -297,7 +297,7 @@ impl<'window> DisplaySurface<'window> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(overlay_view),
+                    resource: wgpu::BindingResource::TextureView(&overlay_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
