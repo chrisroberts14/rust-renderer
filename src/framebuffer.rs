@@ -176,4 +176,58 @@ impl Framebuffer {
     fn pixel_idx(&self, x: usize, y: usize) -> usize {
         y * self.width + x
     }
+
+    #[cfg(test)]
+    fn get_pixel(&self, x: usize, y: usize) -> [u8; 4] {
+        self.pixels[self.pixel_idx(x, y)]
+            .load(Ordering::Relaxed)
+            .to_ne_bytes()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_in_bounds() {
+        let fb = Framebuffer::new(256, 256);
+
+        // In bounds
+        assert!(fb.in_bounds(0, 0)); // Top left
+        assert!(fb.in_bounds(255, 255)); // Bottom right
+        assert!(fb.in_bounds(128, 128)); // Rough centre
+
+        // Out of bounds
+        assert!(!fb.in_bounds(256, 255));
+        assert!(!fb.in_bounds(255, 256));
+        assert!(!fb.in_bounds(256, 256));
+    }
+
+    #[test]
+    fn test_pixel_idx() {
+        let fb = Framebuffer::new(256, 256);
+        assert_eq!(fb.pixel_idx(0, 0), 0);
+        assert_eq!(fb.pixel_idx(0, 255), 65280);
+        assert_eq!(fb.pixel_idx(255, 0), 255);
+        assert_eq!(fb.pixel_idx(255, 255), 65535);
+    }
+
+    #[test]
+    fn test_set_pixel() {
+        let fb = Framebuffer::new(256, 256);
+        fb.set_pixel(0, 0, COLOR_WHITE);
+        assert_eq!(fb.get_pixel(0, 0), COLOR_WHITE);
+    }
+
+    #[test]
+    fn test_set_pixel_fails_when_oob() {
+        let fb = Framebuffer::new(256, 256);
+        fb.set_pixel(1000, 1000, COLOR_WHITE);
+        for x in 0..256 {
+            for y in 0..256 {
+                assert_eq!(fb.get_pixel(x, y), [0, 0, 0, 0]);
+            }
+        }
+    }
 }
