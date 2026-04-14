@@ -9,10 +9,8 @@ mod text;
 
 /// Manages all the different overlays that can be drawn on top of the rendered image.
 pub struct OverlayManager {
-    // The FPS counter is a special case because we want to update it every frame
     fps_counter: FpsCounter,
     last_frame_time: std::time::Instant,
-
     pub stats_overlay: StatsOverlay,
 }
 
@@ -26,7 +24,6 @@ impl OverlayManager {
     }
 
     pub fn write_to_framebuffer(&mut self, framebuffer: &mut Framebuffer) {
-        // Add the FPS stat to the stats overlay before writing it to the framebuffer
         self.stats_overlay
             .add("fps", &self.fps_counter.fps.to_string());
         self.stats_overlay.write_to_framebuffer(framebuffer);

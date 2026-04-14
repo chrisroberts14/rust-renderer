@@ -1,41 +1,20 @@
-//! A simple FPS counter that tracks the number of frames rendered in the last second.
-//! [`FpsCounter`] exposes an `fps` field which can be read to get the most recently calculated FPS value and
-//! a `tick` method which should be called once per frame, passing in the time elapsed since the last call.
-//! The `fps` field is only updated once per second, so it can potentially be stale for up to a second.
-
 use std::time::Duration;
 
-/// A simple FPS counter that tracks the number of frames rendered in the last second.
-/// Call the `tick` method once per frame, passing in the time elapsed since the last call, to update the counter.
-/// The `fps` field will be updated approximately once per second with the number of frames rendered in that period.
+/// Tracks frames-per-second by accumulating frame durations.
+/// Call [`tick`](FpsCounter::tick) once per frame; read [`fps`](FpsCounter::fps) for the last completed second's count.
+#[derive(Default)]
 pub struct FpsCounter {
-    // The total time accumulated since the last FPS update
     accumulated: Duration,
-    // The number of frames rendered since the last FPS update
     frame_count: u32,
-    // The most recently calculated FPS values
     pub fps: u32,
-}
-
-impl Default for FpsCounter {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FpsCounter {
     pub fn new() -> Self {
-        Self {
-            accumulated: Duration::ZERO,
-            frame_count: 0,
-            fps: 0,
-        }
+        Self::default()
     }
 
-    /// Call this method once per frame, passing in the time elapsed since the last call.
-    /// The `fps` field will be updated approximately once per second with the number of frames rendered in that period.
-    ///
-    /// Passing in the elapsed field rather than calculating it ourselves allows for faking time passing in tests
+    /// Pass the elapsed time since the last frame. Accepts an explicit duration so tests can fake time.
     pub fn tick(&mut self, elapsed: Duration) {
         self.frame_count += 1;
         self.accumulated += elapsed;

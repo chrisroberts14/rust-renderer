@@ -17,7 +17,7 @@ impl StatsOverlay {
         for (key, val) in &self.stats {
             draw_text(
                 framebuffer,
-                format!("{}: {}", key, val).as_str(),
+                &format!("{key}: {val}"),
                 3,
                 y,
                 [255, 255, 255, 255],
