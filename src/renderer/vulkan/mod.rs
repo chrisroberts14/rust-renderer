@@ -1,3 +1,7 @@
+mod device;
+mod pipeline;
+mod shaders;
+
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;
 use thiserror::Error;
@@ -11,166 +15,28 @@ use vulkano::command_buffer::{
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
-use vulkano::device::{
-    Device, DeviceCreateInfo, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags,
-};
+use vulkano::device::{Device, Queue};
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
-use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
-use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
-use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
-use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
-use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::{CullMode, PolygonMode, RasterizationState};
-use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
-use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
-use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{
-    DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
-    PipelineShaderStageCreateInfo,
-};
-use vulkano::render_pass::{
-    Framebuffer as VkFramebuffer, FramebufferCreateInfo, RenderPass, Subpass,
-};
+use vulkano::pipeline::graphics::vertex_input::Vertex;
+use vulkano::pipeline::graphics::viewport::Viewport;
+use vulkano::pipeline::{Pipeline, PipelineBindPoint};
+use vulkano::render_pass::{Framebuffer as VkFramebuffer, FramebufferCreateInfo, RenderPass};
 use vulkano::sync::{self, GpuFuture};
-use vulkano::{LoadingError, Validated, VulkanError, VulkanLibrary};
+use vulkano::{LoadingError, Validated, VulkanError};
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec3::Vec3;
 use crate::renderer::Renderer;
+use crate::renderer::vulkan::device::get_device;
+use crate::renderer::vulkan::pipeline::{Pipeline as VulkanPipeline, PipelineType};
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
-
-mod vs {
-    vulkano_shaders::shader! {
-        ty: "vertex",
-        src: r"
-            #version 450
-
-            layout(location = 0) in vec3 position;
-            layout(location = 1) in vec3 normal;
-            layout(location = 2) in vec4 color;
-
-            layout(location = 0) out vec3 frag_world_pos;
-            layout(location = 1) out vec3 frag_normal;
-            layout(location = 2) out vec4 frag_color;
-
-            layout(set = 0, binding = 0) uniform Uniforms {
-                mat4 model;
-                mat4 view;
-                mat4 proj;
-                mat4 normal_mat;
-                vec4 cam_pos;
-                float ambient;
-            };
-
-            void main() {
-                vec4 world_pos = model * vec4(position, 1.0);
-                frag_world_pos = world_pos.xyz;
-                frag_normal = normalize((normal_mat * vec4(normal, 0.0)).xyz);
-                frag_color = color;
-                gl_Position = proj * view * world_pos;
-                // Vulkan NDC has Y+ pointing down; flip to match scene conventions.
-                gl_Position.y = -gl_Position.y;
-            }
-        ",
-    }
-}
-
-mod fs {
-    vulkano_shaders::shader! {
-        ty: "fragment",
-        src: r"
-            #version 450
-
-            layout(location = 0) in vec3 frag_world_pos;
-            layout(location = 1) in vec3 frag_normal;
-            layout(location = 2) in vec4 frag_color;
-
-            layout(location = 0) out vec4 out_color;
-
-            layout(set = 0, binding = 0) uniform Uniforms {
-                mat4 model;
-                mat4 view;
-                mat4 proj;
-                mat4 normal_mat;
-                vec4 cam_pos;
-                float ambient;
-            };
-
-            struct Light {
-                vec4 position;   // xyz = world pos, w = intensity
-                vec4 color;      // xyz = rgb, w = unused
-                vec4 direction;  // xyz = spot dir, w = cone_angle (0 = point)
-                vec4 falloff;    // x = falloff_angle
-            };
-
-            layout(set = 0, binding = 1) uniform LightBlock {
-                Light lights[8];
-                uint light_count;
-            };
-
-            void main() {
-                vec3 n = normalize(frag_normal);
-                vec4 base = frag_color;
-
-                if (light_count == 0u) {
-                    out_color = base;
-                    return;
-                }
-
-                vec3 view_dir = normalize(cam_pos.xyz - frag_world_pos);
-                vec3 diffuse  = vec3(0.0);
-                vec3 specular = vec3(0.0);
-
-                for (uint i = 0u; i < light_count; i++) {
-                    vec3  lpos        = lights[i].position.xyz;
-                    float intensity   = lights[i].position.w;
-                    vec3  diff_vec    = lpos - frag_world_pos;
-                    float dist_sq     = dot(diff_vec, diff_vec);
-                    float dist_atten  = intensity / (1.0 + dist_sq);
-
-                    float cone_atten  = 1.0;
-                    float cone_angle  = lights[i].direction.w;
-                    if (cone_angle > 0.0) {
-                        vec3  spot_dir      = lights[i].direction.xyz;
-                        float falloff_angle = lights[i].falloff.x;
-                        vec3  to_point      = normalize(frag_world_pos - lpos);
-                        float angle         = acos(clamp(dot(spot_dir, to_point), -1.0, 1.0));
-                        if (angle > cone_angle) {
-                            cone_atten = 0.0;
-                        } else {
-                            float inner_angle = cone_angle - falloff_angle;
-                            if (angle > inner_angle) {
-                                float t = (angle - inner_angle) / falloff_angle;
-                                cone_atten = 1.0 - t * t * (3.0 - 2.0 * t);
-                            }
-                        }
-                    }
-
-                    vec3  lcol  = lights[i].color.xyz * (dist_atten * cone_atten);
-                    vec3  ldir  = normalize(diff_vec);
-                    float ndotl = max(dot(n, ldir), 0.0);
-                    diffuse    += ndotl * lcol;
-                    if (ndotl > 0.0) {
-                        vec3 refl = reflect(-ldir, n);
-                        specular += pow(max(dot(refl, view_dir), 0.0), 32.0) * lcol;
-                    }
-                }
-
-                float inv_amb = 1.0 - ambient;
-                vec3  lit = clamp(vec3(ambient) + inv_amb * diffuse + specular, 0.0, 1.0);
-                out_color = vec4(base.rgb * lit, base.a);
-            }
-        ",
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum VulkanRendererError {
@@ -260,50 +126,12 @@ pub struct VulkanRenderer {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     render_pass: Arc<RenderPass>,
-
-    // Notably with Vulkan we have to create pipelines ahead of time so
-    // we have to have different pipelines for wireframe and normal
-    pipeline: Arc<GraphicsPipeline>,
-    wireframe_pipeline: Arc<GraphicsPipeline>,
+    pipeline: VulkanPipeline,
 }
 
 impl VulkanRenderer {
     pub fn new() -> Result<Self, VulkanRendererError> {
-        let library = VulkanLibrary::new()?;
-        let instance = Instance::new(
-            library,
-            InstanceCreateInfo {
-                flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
-                ..Default::default()
-            },
-        )?;
-
-        let physical_device = instance
-            .enumerate_physical_devices()?
-            .next()
-            .ok_or(VulkanRendererError::NoPhysicalDevice)?;
-
-        let queue_family_index = physical_device
-            .queue_family_properties()
-            .iter()
-            .position(|q| q.queue_flags.contains(QueueFlags::GRAPHICS))
-            .ok_or(VulkanRendererError::NoGraphicalQueueFamily)?
-            as u32;
-
-        let (device, mut queues) = Device::new(
-            physical_device,
-            DeviceCreateInfo {
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
-                enabled_features: DeviceFeatures {
-                    fill_mode_non_solid: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        )?;
+        let (device, queue) = get_device()?;
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
@@ -337,90 +165,16 @@ impl VulkanRenderer {
             },
         )?;
 
-        let vs = vs::load(device.clone())?.entry_point("main").unwrap();
-        let fs = fs::load(device.clone())?.entry_point("main").unwrap();
-
-        let vertex_input_state = VulkanVertex::per_vertex().definition(&vs).unwrap();
-
-        let stages = [
-            PipelineShaderStageCreateInfo::new(vs),
-            PipelineShaderStageCreateInfo::new(fs),
-        ];
-
-        let layout = PipelineLayout::new(
-            device.clone(),
-            PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-                .into_pipeline_layout_create_info(device.clone())
-                .unwrap(),
-        )?;
-
-        let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
-
-        let pipeline = GraphicsPipeline::new(
-            device.clone(),
-            None,
-            GraphicsPipelineCreateInfo {
-                stages: stages.clone().into_iter().collect(),
-                vertex_input_state: Some(vertex_input_state.clone()),
-                input_assembly_state: Some(InputAssemblyState::default()),
-                viewport_state: Some(ViewportState::default()),
-                rasterization_state: Some(RasterizationState {
-                    polygon_mode: PolygonMode::Fill,
-                    cull_mode: CullMode::Front,
-                    ..Default::default()
-                }),
-                multisample_state: Some(MultisampleState::default()),
-                depth_stencil_state: Some(DepthStencilState {
-                    depth: Some(DepthState::simple()),
-                    ..Default::default()
-                }),
-                color_blend_state: Some(ColorBlendState::with_attachment_states(
-                    subpass.num_color_attachments(),
-                    ColorBlendAttachmentState::default(),
-                )),
-                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-                subpass: Some(subpass.clone().into()),
-                ..GraphicsPipelineCreateInfo::layout(layout.clone())
-            },
-        )?;
-
-        let wireframe_pipeline = GraphicsPipeline::new(
-            device.clone(),
-            None,
-            GraphicsPipelineCreateInfo {
-                stages: stages.into_iter().collect(),
-                vertex_input_state: Some(vertex_input_state),
-                input_assembly_state: Some(InputAssemblyState::default()),
-                viewport_state: Some(ViewportState::default()),
-                rasterization_state: Some(RasterizationState {
-                    polygon_mode: PolygonMode::Line,
-                    cull_mode: CullMode::Front,
-                    ..Default::default()
-                }),
-                multisample_state: Some(MultisampleState::default()),
-                depth_stencil_state: Some(DepthStencilState {
-                    depth: Some(DepthState::simple()),
-                    ..Default::default()
-                }),
-                color_blend_state: Some(ColorBlendState::with_attachment_states(
-                    subpass.num_color_attachments(),
-                    ColorBlendAttachmentState::default(),
-                )),
-                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-                subpass: Some(subpass.into()),
-                ..GraphicsPipelineCreateInfo::layout(layout)
-            },
-        )?;
+        let pipeline = VulkanPipeline::new(device.clone(), render_pass.clone())?;
 
         Ok(VulkanRenderer {
             device,
-            queue: queues.next().unwrap(),
+            queue,
             memory_allocator,
             command_buffer_allocator,
             descriptor_set_allocator,
             render_pass,
             pipeline,
-            wireframe_pipeline,
         })
     }
 
@@ -553,6 +307,25 @@ impl VulkanRenderer {
         )
         .unwrap()
     }
+
+    fn draw_to_framebuffer(staging_buffer: Subbuffer<[u8]>, framebuffer: &Framebuffer) {
+        let buffer_content = staging_buffer.read().unwrap();
+        for y in 0..framebuffer.height {
+            for x in 0..framebuffer.width {
+                let idx = (y * framebuffer.width + x) * 4;
+                framebuffer.set_pixel(
+                    x,
+                    y,
+                    [
+                        buffer_content[idx],
+                        buffer_content[idx + 1],
+                        buffer_content[idx + 2],
+                        buffer_content[idx + 3],
+                    ],
+                );
+            }
+        }
+    }
 }
 
 impl Renderer for VulkanRenderer {
@@ -564,6 +337,8 @@ impl Renderer for VulkanRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
+        let normal_pipeline = self.pipeline.get_graphics_pipeline(PipelineType::Normal);
+
         let width = framebuffer.width as u32;
         let height = framebuffer.height as u32;
 
@@ -688,7 +463,7 @@ impl Renderer for VulkanRenderer {
                 .collect(),
             )
             .unwrap()
-            .bind_pipeline_graphics(self.pipeline.clone())
+            .bind_pipeline_graphics(normal_pipeline.clone())
             .unwrap();
 
         let light_block = self.build_light_block(lights);
@@ -710,7 +485,7 @@ impl Renderer for VulkanRenderer {
 
             let descriptor_set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
-                self.pipeline.layout().set_layouts()[0].clone(),
+                normal_pipeline.layout().set_layouts()[0].clone(),
                 [
                     WriteDescriptorSet::buffer(0, uniform_buf),
                     WriteDescriptorSet::buffer(1, active_lights.clone()),
@@ -722,7 +497,7 @@ impl Renderer for VulkanRenderer {
             builder
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
-                    self.pipeline.layout().clone(),
+                    normal_pipeline.layout().clone(),
                     0,
                     descriptor_set,
                 )
@@ -757,22 +532,7 @@ impl Renderer for VulkanRenderer {
             .wait(None)
             .unwrap();
 
-        let buffer_content = staging_buffer.read().unwrap();
-        for y in 0..framebuffer.height {
-            for x in 0..framebuffer.width {
-                let idx = (y * framebuffer.width + x) * 4;
-                framebuffer.set_pixel(
-                    x,
-                    y,
-                    [
-                        buffer_content[idx],
-                        buffer_content[idx + 1],
-                        buffer_content[idx + 2],
-                        buffer_content[idx + 3],
-                    ],
-                );
-            }
-        }
+        Self::draw_to_framebuffer(staging_buffer, framebuffer);
 
         vec![("Triangle Count", triangle_count.to_string())]
     }
@@ -783,6 +543,8 @@ impl Renderer for VulkanRenderer {
         camera: &Camera,
         framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)> {
+        let wireframe_pipeline = self.pipeline.get_graphics_pipeline(PipelineType::WireFrame);
+
         let width = framebuffer.width as u32;
         let height = framebuffer.height as u32;
 
@@ -907,7 +669,7 @@ impl Renderer for VulkanRenderer {
                 .collect(),
             )
             .unwrap()
-            .bind_pipeline_graphics(self.wireframe_pipeline.clone())
+            .bind_pipeline_graphics(wireframe_pipeline.clone())
             .unwrap();
 
         let triangle_count: usize = objects.iter().map(|o| o.mesh.faces.len()).sum();
@@ -923,7 +685,7 @@ impl Renderer for VulkanRenderer {
 
             let descriptor_set = DescriptorSet::new(
                 self.descriptor_set_allocator.clone(),
-                self.wireframe_pipeline.layout().set_layouts()[0].clone(),
+                wireframe_pipeline.layout().set_layouts()[0].clone(),
                 [
                     WriteDescriptorSet::buffer(0, uniform_buf),
                     WriteDescriptorSet::buffer(1, empty_light_block.clone()),
@@ -935,7 +697,7 @@ impl Renderer for VulkanRenderer {
             builder
                 .bind_descriptor_sets(
                     PipelineBindPoint::Graphics,
-                    self.wireframe_pipeline.layout().clone(),
+                    wireframe_pipeline.layout().clone(),
                     0,
                     descriptor_set,
                 )
@@ -970,22 +732,7 @@ impl Renderer for VulkanRenderer {
             .wait(None)
             .unwrap();
 
-        let buffer_content = staging_buffer.read().unwrap();
-        for y in 0..framebuffer.height {
-            for x in 0..framebuffer.width {
-                let idx = (y * framebuffer.width + x) * 4;
-                framebuffer.set_pixel(
-                    x,
-                    y,
-                    [
-                        buffer_content[idx],
-                        buffer_content[idx + 1],
-                        buffer_content[idx + 2],
-                        buffer_content[idx + 3],
-                    ],
-                );
-            }
-        }
+        Self::draw_to_framebuffer(staging_buffer, framebuffer);
 
         vec![("Triangle Count", triangle_count.to_string())]
     }
