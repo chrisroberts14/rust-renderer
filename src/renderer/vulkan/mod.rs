@@ -11,7 +11,9 @@ use vulkano::command_buffer::{
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
-use vulkano::device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags};
+use vulkano::device::{
+    Device, DeviceCreateInfo, DeviceFeatures, Queue, QueueCreateInfo, QueueFlags,
+};
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
@@ -22,7 +24,7 @@ use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorB
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::RasterizationState;
+use vulkano::pipeline::graphics::rasterization::{CullMode, PolygonMode, RasterizationState};
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
@@ -258,7 +260,11 @@ pub struct VulkanRenderer {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     render_pass: Arc<RenderPass>,
+
+    // Notably with Vulkan we have to create pipelines ahead of time so
+    // we have to have different pipelines for wireframe and normal
     pipeline: Arc<GraphicsPipeline>,
+    wireframe_pipeline: Arc<GraphicsPipeline>,
 }
 
 impl VulkanRenderer {
@@ -291,6 +297,10 @@ impl VulkanRenderer {
                     queue_family_index,
                     ..Default::default()
                 }],
+                enabled_features: DeviceFeatures {
+                    fill_mode_non_solid: true,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )?;
@@ -350,11 +360,43 @@ impl VulkanRenderer {
             device.clone(),
             None,
             GraphicsPipelineCreateInfo {
+                stages: stages.clone().into_iter().collect(),
+                vertex_input_state: Some(vertex_input_state.clone()),
+                input_assembly_state: Some(InputAssemblyState::default()),
+                viewport_state: Some(ViewportState::default()),
+                rasterization_state: Some(RasterizationState {
+                    polygon_mode: PolygonMode::Fill,
+                    cull_mode: CullMode::Front,
+                    ..Default::default()
+                }),
+                multisample_state: Some(MultisampleState::default()),
+                depth_stencil_state: Some(DepthStencilState {
+                    depth: Some(DepthState::simple()),
+                    ..Default::default()
+                }),
+                color_blend_state: Some(ColorBlendState::with_attachment_states(
+                    subpass.num_color_attachments(),
+                    ColorBlendAttachmentState::default(),
+                )),
+                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+                subpass: Some(subpass.clone().into()),
+                ..GraphicsPipelineCreateInfo::layout(layout.clone())
+            },
+        )?;
+
+        let wireframe_pipeline = GraphicsPipeline::new(
+            device.clone(),
+            None,
+            GraphicsPipelineCreateInfo {
                 stages: stages.into_iter().collect(),
                 vertex_input_state: Some(vertex_input_state),
                 input_assembly_state: Some(InputAssemblyState::default()),
                 viewport_state: Some(ViewportState::default()),
-                rasterization_state: Some(RasterizationState::default()),
+                rasterization_state: Some(RasterizationState {
+                    polygon_mode: PolygonMode::Line,
+                    cull_mode: CullMode::Front,
+                    ..Default::default()
+                }),
                 multisample_state: Some(MultisampleState::default()),
                 depth_stencil_state: Some(DepthStencilState {
                     depth: Some(DepthState::simple()),
@@ -378,6 +420,7 @@ impl VulkanRenderer {
             descriptor_set_allocator,
             render_pass,
             pipeline,
+            wireframe_pipeline,
         })
     }
 
@@ -736,20 +779,214 @@ impl Renderer for VulkanRenderer {
 
     fn render_wireframe(
         &self,
-        _objects: &[Object],
-        _camera: &Camera,
-        _framebuffer: &Framebuffer,
+        objects: &[Object],
+        camera: &Camera,
+        framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)> {
-        vec![]
-    }
-}
+        let width = framebuffer.width as u32;
+        let height = framebuffer.height as u32;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        let color_image = Image::new(
+            self.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R8G8B8A8_UNORM,
+                extent: [width, height, 1],
+                usage: ImageUsage::COLOR_ATTACHMENT
+                    | ImageUsage::TRANSFER_SRC
+                    | ImageUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
-    #[test]
-    fn test_new() {
-        VulkanRenderer::new().unwrap();
+        let depth_image = Image::new(
+            self.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D32_SFLOAT,
+                extent: [width, height, 1],
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let color_view = ImageView::new_default(color_image.clone()).unwrap();
+        let depth_view = ImageView::new_default(depth_image).unwrap();
+
+        let vk_framebuffer = VkFramebuffer::new(
+            self.render_pass.clone(),
+            FramebufferCreateInfo {
+                attachments: vec![color_view, depth_view],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let staging_buffer: Subbuffer<[u8]> = Buffer::new_slice(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_DST,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (width * height * 4) as u64,
+        )
+        .unwrap();
+
+        // Seed color image from CPU framebuffer so the render pass composites on top (e.g. skybox).
+        let upload_buffer: Subbuffer<[u8]> = Buffer::new_slice(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            (width * height * 4) as u64,
+        )
+        .unwrap();
+        upload_buffer
+            .write()
+            .unwrap()
+            .copy_from_slice(framebuffer.as_bytes());
+
+        let mut builder = AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap();
+
+        builder
+            .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
+                upload_buffer,
+                color_image.clone(),
+            ))
+            .unwrap();
+
+        builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![
+                        None,                // color: LoadOp::Load, seeded above
+                        Some(1.0f32.into()), // depth clear
+                    ],
+                    ..RenderPassBeginInfo::framebuffer(vk_framebuffer)
+                },
+                SubpassBeginInfo {
+                    contents: SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .set_viewport(
+                0,
+                [Viewport {
+                    offset: [0.0, 0.0],
+                    extent: [width as f32, height as f32],
+                    depth_range: 0.0..=1.0,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap()
+            .bind_pipeline_graphics(self.wireframe_pipeline.clone())
+            .unwrap();
+
+        let triangle_count: usize = objects.iter().map(|o| o.mesh.faces.len()).sum();
+        let empty_light_block = self.build_light_block(&[]);
+
+        for obj in objects {
+            if obj.mesh.faces.is_empty() {
+                continue;
+            }
+            let (vbuf, ibuf) = self.upload_object(obj);
+            let index_count = ibuf.len() as u32;
+            let uniform_buf = self.build_uniforms(obj, camera, 1.0);
+
+            let descriptor_set = DescriptorSet::new(
+                self.descriptor_set_allocator.clone(),
+                self.wireframe_pipeline.layout().set_layouts()[0].clone(),
+                [
+                    WriteDescriptorSet::buffer(0, uniform_buf),
+                    WriteDescriptorSet::buffer(1, empty_light_block.clone()),
+                ],
+                [],
+            )
+            .unwrap();
+
+            builder
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    self.wireframe_pipeline.layout().clone(),
+                    0,
+                    descriptor_set,
+                )
+                .unwrap()
+                .bind_vertex_buffers(0, vbuf)
+                .unwrap()
+                .bind_index_buffer(ibuf)
+                .unwrap();
+
+            // Safety: indices are [0,1,2, 3,4,5, ...] generated in sync with verts, so every index < verts.len().
+            unsafe {
+                builder.draw_indexed(index_count, 1, 0, 0, 0).unwrap();
+            }
+        }
+
+        builder
+            .end_render_pass(SubpassEndInfo::default())
+            .unwrap()
+            .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
+                color_image,
+                staging_buffer.clone(),
+            ))
+            .unwrap();
+
+        let command_buffer = builder.build().unwrap();
+
+        sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
+
+        let buffer_content = staging_buffer.read().unwrap();
+        for y in 0..framebuffer.height {
+            for x in 0..framebuffer.width {
+                let idx = (y * framebuffer.width + x) * 4;
+                framebuffer.set_pixel(
+                    x,
+                    y,
+                    [
+                        buffer_content[idx],
+                        buffer_content[idx + 1],
+                        buffer_content[idx + 2],
+                        buffer_content[idx + 3],
+                    ],
+                );
+            }
+        }
+
+        vec![("Triangle Count", triangle_count.to_string())]
     }
 }
