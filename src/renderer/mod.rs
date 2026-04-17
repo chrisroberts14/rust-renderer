@@ -7,6 +7,8 @@ mod shade;
 pub(crate) mod shadow_map;
 pub mod single_thread_raster_renderer;
 pub mod tile;
+pub mod vulkan;
+use crate::renderer::vulkan::VulkanRenderer;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
@@ -34,6 +36,7 @@ pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
     Gpu,
+    Vulkan,
 }
 
 impl RendererChoice {
@@ -46,6 +49,9 @@ impl RendererChoice {
                 ActiveRenderer::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
             }
             RendererChoice::Gpu => ActiveRenderer::Gpu(Box::default()),
+            RendererChoice::Vulkan => ActiveRenderer::Vulkan(Box::new(
+                VulkanRenderer::new().expect("Failed to create Vulkan renderer"),
+            )),
         }
     }
 }
@@ -59,6 +65,7 @@ pub enum ActiveRenderer {
     SingleThreadRaster(Box<SingleThreadRasterRenderer>),
     MultiThreadRaster(Box<MultiThreadRasterRenderer>),
     Gpu(Box<GpuRasterRenderer>),
+    Vulkan(Box<VulkanRenderer>),
 }
 
 impl ActiveRenderer {
@@ -67,6 +74,7 @@ impl ActiveRenderer {
             Self::SingleThreadRaster(_) => RendererChoice::SingleThreadRaster,
             Self::MultiThreadRaster(_) => RendererChoice::MultiThreadRaster,
             Self::Gpu(_) => RendererChoice::Gpu,
+            Self::Vulkan(_) => RendererChoice::Vulkan,
         }
     }
 
@@ -83,6 +91,7 @@ impl ActiveRenderer {
     pub fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
         match self {
             Self::Gpu(r) => r.take_gpu_view(),
+            Self::Vulkan(_) => None,
             _ => None,
         }
     }
@@ -92,7 +101,7 @@ impl ActiveRenderer {
         match self {
             Self::SingleThreadRaster(r) => r.increase_tile_count(delta),
             Self::MultiThreadRaster(r) => r.increase_tile_count(delta),
-            Self::Gpu(_) => {}
+            Self::Gpu(_) | Self::Vulkan(_) => {}
         }
     }
 
@@ -101,7 +110,7 @@ impl ActiveRenderer {
         match self {
             Self::SingleThreadRaster(r) => r.decrease_tile_count(delta),
             Self::MultiThreadRaster(r) => r.decrease_tile_count(delta),
-            Self::Gpu(_) => {}
+            Self::Gpu(_) | Self::Vulkan(_) => {}
         }
     }
 }
@@ -123,6 +132,7 @@ impl Renderer for ActiveRenderer {
                 r.render_objects(objects, camera, lights, framebuffer, ambient)
             }
             Self::Gpu(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
+            Self::Vulkan(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
         }
     }
 
@@ -136,6 +146,7 @@ impl Renderer for ActiveRenderer {
             Self::SingleThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::MultiThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::Gpu(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::Vulkan(r) => r.render_wireframe(objects, camera, framebuffer),
         }
     }
 }
@@ -146,6 +157,7 @@ impl fmt::Display for ActiveRenderer {
             Self::SingleThreadRaster(_) => write!(f, "SingleThreadRaster"),
             Self::MultiThreadRaster(_) => write!(f, "MultiThreadRaster"),
             Self::Gpu(_) => write!(f, "Gpu"),
+            Self::Vulkan(_) => write!(f, "Vulkan"),
         }
     }
 }

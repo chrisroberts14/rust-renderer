@@ -7,6 +7,9 @@ name = "rust-renderer"
 version = "0.1.0"
 edition = "2024"
 
+[profile.dev]
+opt-level = 1
+
 [dependencies]
 enum-iter-macro = { path = "macros/enum-iter-macro" }
 
@@ -23,6 +26,9 @@ serde_json = "1.0.149"
 strum_macros = "0.28.0"
 wgpu = "29.0.1"
 winit = "0.31.0-beta.2"
+vulkano = "0.35.2"
+vulkano-shaders = "0.35"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 criterion = "0.8.2"
