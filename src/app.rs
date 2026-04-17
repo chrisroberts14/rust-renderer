@@ -15,7 +15,7 @@ use crate::maths::vec3::Vec3;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::ActiveRenderer;
-use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
+use crate::renderer::wgsl::GpuRasterRenderer;
 use crate::scenes::scene::Scene;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";

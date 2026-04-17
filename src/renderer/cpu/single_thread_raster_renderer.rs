@@ -1,21 +1,24 @@
+/// Single threaded version of the raster renderer. Used for testing and debugging,
+/// as it is not as performant as the multi-threaded version.
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
+use crate::renderer::Renderer;
 use crate::renderer::prepare::prepare_render;
 use crate::renderer::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
 use crate::renderer::shadow_map::build_shadow_map;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
-use rayon::prelude::*;
 use std::sync::Arc;
 
-const SHADOW_MAP_SIZE: usize = 512;
+// Smaller than the multi-threaded renderer's map for faster single-core debug builds.
+const SHADOW_MAP_SIZE: usize = 128;
 
-pub struct MultiThreadRasterRenderer {
+pub struct SingleThreadRasterRenderer {
     tile_size: usize,
     shadow_map_size: usize,
 }
 
-impl MultiThreadRasterRenderer {
+impl SingleThreadRasterRenderer {
     pub fn new(tile_size: usize) -> Self {
         Self {
             tile_size,
@@ -39,7 +42,7 @@ impl MultiThreadRasterRenderer {
     }
 }
 
-impl super::Renderer for MultiThreadRasterRenderer {
+impl Renderer for SingleThreadRasterRenderer {
     fn render_objects(
         &self,
         objects: &[Object],
@@ -68,8 +71,8 @@ impl super::Renderer for MultiThreadRasterRenderer {
             ambient,
         };
         tiles
-            .par_iter()
-            .zip(bins.par_iter())
+            .iter()
+            .zip(bins.iter())
             .for_each(|(tile, tri_indices)| {
                 rasterize_tile(tile, tri_indices, &triangles, camera, &shading, framebuffer);
             });

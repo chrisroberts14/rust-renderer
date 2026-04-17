@@ -1,26 +1,26 @@
 mod clip;
-pub mod gpu_raster_renderer;
-pub mod multi_thread_raster_renderer;
+pub mod cpu;
 pub(crate) mod prepare;
 pub(crate) mod rasterize;
 mod shade;
 pub(crate) mod shadow_map;
-pub mod single_thread_raster_renderer;
 pub mod tile;
 pub mod vulkan;
+pub mod wgsl;
+
 use crate::renderer::vulkan::VulkanRenderer;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
-use crate::renderer::gpu_raster_renderer::GpuRasterRenderer;
-use crate::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
-use crate::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
+use crate::renderer::wgsl::GpuRasterRenderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use clap::ValueEnum;
+use cpu::multi_thread_raster_renderer::MultiThreadRasterRenderer;
+use cpu::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use enum_iter_macro::EnumIter;
 use std::fmt;
 use std::sync::Arc;

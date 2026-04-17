@@ -3,10 +3,10 @@ use criterion::{
 };
 use rust_renderer::file::scene_file::SceneFile;
 use rust_renderer::maths::vec3::Vec3;
+use rust_renderer::renderer::cpu::multi_thread_raster_renderer::MultiThreadRasterRenderer;
+use rust_renderer::renderer::cpu::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use rust_renderer::renderer::gpu_raster_renderer::GpuRasterRenderer;
-use rust_renderer::renderer::multi_thread_raster_renderer::MultiThreadRasterRenderer;
 use rust_renderer::renderer::shade;
-use rust_renderer::renderer::single_thread_raster_renderer::SingleThreadRasterRenderer;
 use rust_renderer::scenes::lights::Light;
 use rust_renderer::scenes::lights::pointlight::PointLight;
 use rust_renderer::scenes::scene::Scene;
