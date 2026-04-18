@@ -16,7 +16,7 @@ use vulkano::command_buffer::{
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
-use vulkano::device::{Device, Queue};
+use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
@@ -133,7 +133,7 @@ pub struct VulkanRenderer {
 
 impl VulkanRenderer {
     pub fn new() -> Result<Self, VulkanRendererError> {
-        let (device, queue) = get_device()?;
+        let (device, queue) = get_device(DeviceExtensions::empty())?;
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
