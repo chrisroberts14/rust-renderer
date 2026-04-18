@@ -83,8 +83,7 @@ fn scene() -> impl Strategy<Value = Scene> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::renderer::cpu::multi_thread_raster_renderer::MultiThreadRasterRenderer;
-    use crate::renderer::cpu::single_thread_raster_renderer::SingleThreadRasterRenderer;
+    use crate::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
     use crate::renderer::wgsl::GpuRasterRenderer;
     use std::sync::{LazyLock, Mutex};
 
