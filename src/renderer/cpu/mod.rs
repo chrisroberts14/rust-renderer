@@ -1,3 +1,5 @@
+pub mod display;
+
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::Renderer;

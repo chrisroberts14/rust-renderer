@@ -1,13 +1,15 @@
-/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
-/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
-///
-use crate::display::DisplaySurface;
+pub mod display;
+
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::renderer::shadow_map::light_view_and_fov;
+/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
+/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
+///
+use crate::renderer::wgsl::display::WgslDisplay;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -187,7 +189,7 @@ impl GpuRasterRenderer {
 
     /// Creates a renderer that shares the wgpu device and queue with the given display surface.
     /// This allows the GPU renderer to blit its output directly to the surface without a CPU readback.
-    pub fn from_display(display: &DisplaySurface<'_>) -> Self {
+    pub fn from_display(display: &WgslDisplay) -> Self {
         let device = display.shared_device();
         let queue = display.shared_queue();
 

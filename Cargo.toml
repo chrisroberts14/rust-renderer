@@ -17,6 +17,7 @@ bytemuck = { version = "1.22", features = ["derive"] }
 clap = { version = "4.6.0", features = ["derive"] }
 image = { version = "0.25.10", features = ["exr"] }
 indexmap = "2.13.0"
+pixels = "0.16.0"
 pollster = "0.4.0"
 proptest = "1.11.0"
 rayon = "1.11.0"

@@ -1,4 +1,5 @@
 mod device;
+pub mod display;
 mod pipeline;
 mod shaders;
 

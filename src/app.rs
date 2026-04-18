@@ -6,7 +6,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes};
 
-use crate::display::DisplaySurface;
+use crate::display::Display;
 use crate::file::file_iter::FileIter;
 use crate::file::key_bindings_file::{Action, KeyBindings};
 use crate::file::scene_file::SceneFile;
@@ -15,7 +15,9 @@ use crate::maths::vec3::Vec3;
 use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::ActiveRenderer;
+use crate::renderer::cpu::display::CpuDisplay;
 use crate::renderer::wgsl::GpuRasterRenderer;
+use crate::renderer::wgsl::display::WgslDisplay;
 use crate::scenes::scene::Scene;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
@@ -23,19 +25,16 @@ const NORMAL_SPEED: f32 = 0.05;
 const FAST_SPEED: f32 = 0.25;
 
 pub struct App {
-    display: Option<DisplaySurface<'static>>,
+    display: Option<Box<dyn Display>>,
     scene: Scene,
     fast_move: bool,
-    scene_files: Option<FileIter>, // If this is empty a specific scene was rendered
+    scene_files: Option<FileIter>,
     renderer: ActiveRenderer,
     overlays: OverlayManager,
     key_bindings: KeyBindings,
 }
 
 impl App {
-    /// Create the app with an optional Scene to render
-    ///
-    /// If this is left empty the first in the scene defs file will be loaded instead
     pub fn new(
         scene_option: Option<Scene>,
         renderer: ActiveRenderer,
@@ -67,6 +66,24 @@ impl App {
         })
     }
 
+    /// Creates the appropriate display backend for the current renderer, initialising a GPU
+    /// renderer against the new display's shared device/queue if needed.
+    fn make_display(
+        renderer: &mut ActiveRenderer,
+        window: Arc<dyn Window>,
+        width: u32,
+        height: u32,
+    ) -> Box<dyn Display> {
+        match renderer {
+            ActiveRenderer::Gpu(_) => {
+                let wgsl = WgslDisplay::new(window, width as usize, height as usize);
+                *renderer = ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(&wgsl)));
+                Box::new(wgsl)
+            }
+            _ => Box::new(CpuDisplay::new(window, width, height)),
+        }
+    }
+
     fn move_camera(&mut self, direction: Vec3, sign: f32) {
         let speed = if self.fast_move {
             FAST_SPEED
@@ -74,18 +91,19 @@ impl App {
             NORMAL_SPEED
         };
         let new_position = self.scene.camera.position + (direction * sign * speed);
-        // Check for collision with any objects
         if !self.scene.is_point_inside_any_object(&new_position) {
             self.scene.camera.position = new_position;
         }
     }
 
-    fn display_mut(&mut self) -> &mut DisplaySurface<'static> {
-        self.display.as_mut().expect("Display not initialized")
+    fn display_mut(&mut self) -> &mut dyn Display {
+        self.display
+            .as_deref_mut()
+            .expect("Display not initialized")
     }
 
-    fn display_ref(&self) -> &DisplaySurface<'static> {
-        self.display.as_ref().expect("Display not initialized")
+    fn display_ref(&self) -> &dyn Display {
+        self.display.as_deref().expect("Display not initialized")
     }
 
     fn perform_action(&mut self, action: &Action) -> Result<(), Box<dyn std::error::Error>> {
@@ -139,14 +157,23 @@ impl App {
                 self.display_mut().release_mouse()?;
             }
             Action::NextRenderer => {
+                let window = self.display_ref().window();
+                let width = self.scene.framebuffer.width as u32;
+                let height = self.scene.framebuffer.height as u32;
+
+                // Drop the current display before creating the new one. The two wgpu stacks
+                // (wgpu 29 for WgslDisplay, wgpu 27 inside pixels for CpuDisplay) can't both
+                // hold an active D3D12 swap chain for the same HWND simultaneously.
+                self.display = None;
+
                 self.renderer.next();
-                if matches!(self.renderer, ActiveRenderer::Gpu(_))
-                    && let Some(display) = &self.display
-                {
-                    self.renderer =
-                        ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(display)));
-                }
-                // Clear the overlay so only stats from the new renderer are shown
+                self.display = Some(Self::make_display(
+                    &mut self.renderer,
+                    window,
+                    width,
+                    height,
+                ));
+
                 self.overlays.create_new_stats_overlay(vec![(
                     "renderer_type",
                     &format!("{}", self.renderer),
@@ -157,9 +184,6 @@ impl App {
         Ok(())
     }
 
-    /// Handle keyboard entries
-    /// This mainly exists as a helper to prevent the window_event function
-    /// from becoming too large
     fn handle_keyboard(&mut self, key_event: &KeyEvent) -> Result<(), Box<dyn std::error::Error>> {
         let key_str = match &key_event.logical_key {
             Key::Character(ch) => ch.to_string(),
@@ -186,7 +210,6 @@ impl App {
     }
 }
 
-/// Map a winit `NamedKey` to the lowercase string used in the keybindings file
 fn named_key_to_str(key: &NamedKey) -> Option<&'static str> {
     match key {
         NamedKey::Shift => Some("shift"),
@@ -213,27 +236,17 @@ impl ApplicationHandler for App {
 
         let window_size = window.surface_size();
 
-        let display = DisplaySurface::new(
+        self.display = Some(Self::make_display(
+            &mut self.renderer,
             window,
-            window_size.width as usize,
-            window_size.height as usize,
-        );
-
-        self.display = Some(display);
-
-        // If the renderer is GPU, reinitialize it using the shared device from the display so that
-        // GPU textures can be blitted directly to the surface without a CPU readback.
-        if matches!(self.renderer, ActiveRenderer::Gpu(_)) {
-            self.renderer = ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(
-                self.display_ref(),
-            )));
-        }
+            window_size.width,
+            window_size.height,
+        ));
 
         self.display_mut()
             .capture_mouse()
             .expect("Failed to capture mouse");
 
-        // Request the first frame to be drawn
         self.display_ref().request_redraw();
     }
 
@@ -249,7 +262,6 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                // Render the whole scene and when that is done tick the fps counter
                 let stats = self.scene.render_scene(&self.renderer);
 
                 if self.scene.settings.show_overlay {
@@ -281,7 +293,6 @@ impl ApplicationHandler for App {
                         .present_cpu_frame(self.scene.framebuffer.as_bytes());
                 }
 
-                // Render the next frame
                 self.display_ref().request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
@@ -295,7 +306,6 @@ impl ApplicationHandler for App {
                 event: key_event, ..
             } => {
                 if let Err(error) = self.handle_keyboard(&key_event) {
-                    // Log any keyboard errors
                     eprintln!("{:?}", error);
                 }
             }
