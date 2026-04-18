@@ -6,6 +6,7 @@ use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
 use vulkano::swapchain::Surface;
 use winit::event_loop::EventLoop;
+use winit::window::CursorGrabMode;
 
 pub struct VulkanDisplay {
     #[allow(dead_code)]
@@ -18,6 +19,7 @@ pub struct VulkanDisplay {
     device: Arc<Device>,
     #[allow(dead_code)]
     queue: Arc<Queue>,
+    cursor_grabbed: bool,
 }
 
 impl VulkanDisplay {
@@ -52,6 +54,7 @@ impl VulkanDisplay {
             surface,
             device,
             queue,
+            cursor_grabbed: false,
         }
     }
 
@@ -73,19 +76,31 @@ impl Display for VulkanDisplay {
     }
 
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        todo!()
+        self.window.set_cursor_visible(false);
+        if self
+            .window
+            .set_cursor_grab(CursorGrabMode::Confined)
+            .is_err()
+        {
+            self.window.set_cursor_grab(CursorGrabMode::Locked)?;
+        }
+        self.cursor_grabbed = true;
+        Ok(())
     }
 
     fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        todo!()
+        self.window.set_cursor_visible(true);
+        self.window.set_cursor_grab(CursorGrabMode::None)?;
+        self.cursor_grabbed = false;
+        Ok(())
     }
 
     fn request_redraw(&self) {
-        todo!()
+        self.window.request_redraw();
     }
 
     fn is_cursor_grabbed(&self) -> bool {
-        todo!()
+        self.cursor_grabbed
     }
 
     fn window(&self) -> Arc<dyn winit::window::Window> {
