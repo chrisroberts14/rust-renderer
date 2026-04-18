@@ -8,19 +8,17 @@ pub mod tile;
 pub mod vulkan;
 pub mod wgsl;
 
-use crate::renderer::vulkan::VulkanRenderer;
-
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
+use crate::renderer::vulkan::VulkanRenderer;
 use crate::renderer::wgsl::GpuRasterRenderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use clap::ValueEnum;
-use cpu::multi_thread_raster_renderer::MultiThreadRasterRenderer;
-use cpu::single_thread_raster_renderer::SingleThreadRasterRenderer;
+use cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
 use enum_iter_macro::EnumIter;
 use std::fmt;
 use std::sync::Arc;
@@ -42,16 +40,10 @@ pub enum RendererChoice {
 impl RendererChoice {
     pub fn into_active(self) -> ActiveRenderer {
         match self {
-            RendererChoice::SingleThreadRaster => {
-                ActiveRenderer::SingleThreadRaster(Box::new(SingleThreadRasterRenderer::new(32)))
-            }
-            RendererChoice::MultiThreadRaster => {
-                ActiveRenderer::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
-            }
-            RendererChoice::Gpu => ActiveRenderer::Gpu(Box::default()),
-            RendererChoice::Vulkan => ActiveRenderer::Vulkan(Box::new(
-                VulkanRenderer::new().expect("Failed to create Vulkan renderer"),
-            )),
+            RendererChoice::SingleThreadRaster => cpu::single_thread_active(),
+            RendererChoice::MultiThreadRaster => cpu::multi_thread_active(),
+            RendererChoice::Gpu => wgsl::into_active(),
+            RendererChoice::Vulkan => vulkan::into_active(),
         }
     }
 }

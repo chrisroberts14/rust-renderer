@@ -536,6 +536,12 @@ impl VulkanRenderer {
     }
 }
 
+pub fn into_active() -> super::ActiveRenderer {
+    super::ActiveRenderer::Vulkan(Box::new(
+        VulkanRenderer::new().expect("Failed to create Vulkan renderer"),
+    ))
+}
+
 impl Renderer for VulkanRenderer {
     fn render_objects(
         &self,

@@ -987,3 +987,7 @@ impl super::Renderer for GpuRasterRenderer {
         self.render_scene(objects, camera, &[], framebuffer, 1.0, true)
     }
 }
+
+pub fn into_active() -> super::ActiveRenderer {
+    super::ActiveRenderer::Gpu(Box::default())
+}
