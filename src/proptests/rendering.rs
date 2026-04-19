@@ -84,13 +84,13 @@ fn scene() -> impl Strategy<Value = Scene> {
 mod tests {
     use super::*;
     use crate::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
-    use crate::renderer::wgsl::GpuRasterRenderer;
+    use crate::renderer::wgsl::WGSLRenderer;
     use std::sync::{LazyLock, Mutex};
 
     // Initialised once; Mutex serialises access so only one proptest iteration
     // touches the GPU at a time without recreating the device each run.
-    static GPU_RENDERER: LazyLock<Mutex<GpuRasterRenderer>> =
-        LazyLock::new(|| Mutex::new(GpuRasterRenderer::new()));
+    static GPU_RENDERER: LazyLock<Mutex<WGSLRenderer>> =
+        LazyLock::new(|| Mutex::new(WGSLRenderer::new()));
 
     proptest! {
         #[test]

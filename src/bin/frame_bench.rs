@@ -1,7 +1,7 @@
 use rust_renderer::file::scene_file::SceneFile;
 use rust_renderer::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
 use rust_renderer::renderer::vulkan::VulkanRenderer;
-use rust_renderer::renderer::wgsl::GpuRasterRenderer;
+use rust_renderer::renderer::wgsl::WGSLRenderer;
 use rust_renderer::scenes::scene::Scene;
 use std::time::{Duration, Instant};
 
@@ -51,7 +51,7 @@ fn main() {
         s.render_scene(&MultiThreadRasterRenderer::new(32));
     });
 
-    let gpu = GpuRasterRenderer::new();
+    let gpu = WGSLRenderer::new();
     run("wgsl_gpu", &mut load_scene(), |s| {
         s.render_scene(&gpu);
     });

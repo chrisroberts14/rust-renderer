@@ -96,7 +96,7 @@ impl WgslDisplay {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("blit_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../blit.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("blit.wgsl").into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,

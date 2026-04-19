@@ -80,7 +80,7 @@ struct ShadowBindings<'a> {
     block_buf: &'a wgpu::Buffer,
 }
 
-pub struct GpuRasterRenderer {
+pub struct WGSLRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pipeline: wgpu::RenderPipeline,
@@ -133,13 +133,13 @@ fn light_gpu_view_proj(light: &dyn Light, near: f32, far: f32) -> Mat4 {
     proj * view
 }
 
-impl Default for GpuRasterRenderer {
+impl Default for WGSLRenderer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl GpuRasterRenderer {
+impl WGSLRenderer {
     /// Creates the renderer, blocking the calling thread until the wgpu device is ready.
     pub fn new() -> Self {
         pollster::block_on(Self::init_async())
@@ -964,7 +964,7 @@ impl GpuRasterRenderer {
     }
 }
 
-impl super::Renderer for GpuRasterRenderer {
+impl super::Renderer for WGSLRenderer {
     /// Renders all objects with Phong shading and shadow maps, copies the result from the GPU
     /// to the CPU framebuffer, and returns triangle statistics.
     fn render_objects(

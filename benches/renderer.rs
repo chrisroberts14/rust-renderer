@@ -5,7 +5,7 @@ use rust_renderer::file::scene_file::SceneFile;
 use rust_renderer::maths::vec3::Vec3;
 use rust_renderer::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
 use rust_renderer::renderer::shade;
-use rust_renderer::renderer::wgsl::GpuRasterRenderer;
+use rust_renderer::renderer::wgsl::WGSLRenderer;
 use rust_renderer::scenes::lights::Light;
 use rust_renderer::scenes::lights::pointlight::PointLight;
 use rust_renderer::scenes::scene::Scene;
@@ -65,7 +65,7 @@ fn add_multi_thread_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, sc
 fn add_gpu_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: &mut Scene) {
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            GpuRasterRenderer::new,
+            WGSLRenderer::new,
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );
@@ -75,7 +75,7 @@ fn add_gpu_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, scene: &mut
 
     group.bench_function(format!("{name}/wireframe"), |b| {
         b.iter_batched(
-            GpuRasterRenderer::new,
+            WGSLRenderer::new,
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );

@@ -18,7 +18,7 @@ use crate::renderer::ActiveRenderer;
 use crate::renderer::cpu::display::CpuDisplay;
 use crate::renderer::vulkan::VulkanRenderer;
 use crate::renderer::vulkan::display::VulkanDisplay;
-use crate::renderer::wgsl::GpuRasterRenderer;
+use crate::renderer::wgsl::WGSLRenderer;
 use crate::renderer::wgsl::display::WgslDisplay;
 use crate::scenes::scene::Scene;
 
@@ -79,7 +79,7 @@ impl App {
         match renderer {
             ActiveRenderer::Gpu(_) => {
                 let wgsl = WgslDisplay::new(window, width as usize, height as usize);
-                *renderer = ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(&wgsl)));
+                *renderer = ActiveRenderer::Gpu(Box::new(WGSLRenderer::from_display(&wgsl)));
                 Box::new(wgsl)
             }
             ActiveRenderer::Vulkan(_) => {

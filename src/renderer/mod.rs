@@ -13,7 +13,7 @@ use crate::geometry::object::Object;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::renderer::vulkan::VulkanRenderer;
-use crate::renderer::wgsl::GpuRasterRenderer;
+use crate::renderer::wgsl::WGSLRenderer;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
@@ -56,7 +56,7 @@ impl RendererChoice {
 pub enum ActiveRenderer {
     SingleThreadRaster(Box<SingleThreadRasterRenderer>),
     MultiThreadRaster(Box<MultiThreadRasterRenderer>),
-    Gpu(Box<GpuRasterRenderer>),
+    Gpu(Box<WGSLRenderer>),
     Vulkan(Box<VulkanRenderer>),
 }
 
