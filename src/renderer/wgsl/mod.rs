@@ -6,9 +6,6 @@ use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
 use crate::renderer::shadow_map::light_view_and_fov;
-/// A renderer that rasterizes geometry on the GPU via wgpu, then reads the pixels back to a CPU
-/// [`Framebuffer`] so it is compatible with the rest of the rendering pipeline.
-///
 use crate::renderer::wgsl::display::WgslDisplay;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
