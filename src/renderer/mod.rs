@@ -83,7 +83,13 @@ impl ActiveRenderer {
     pub fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
         match self {
             Self::Gpu(r) => r.take_gpu_view(),
-            Self::Vulkan(_) => None,
+            _ => None,
+        }
+    }
+
+    pub fn take_vk_image(&self) -> Option<Arc<vulkano::image::Image>> {
+        match self {
+            Self::Vulkan(r) => r.take_vk_image(),
             _ => None,
         }
     }

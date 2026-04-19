@@ -4,6 +4,7 @@ mod pipeline;
 mod shaders;
 
 use bytemuck::{Pod, Zeroable};
+use std::cell::RefCell;
 use std::sync::Arc;
 use thiserror::Error;
 use vulkano::buffer::{
@@ -11,8 +12,8 @@ use vulkano::buffer::{
 };
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, CopyImageToBufferInfo,
-    RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, RenderPassBeginInfo,
+    SubpassBeginInfo, SubpassContents, SubpassEndInfo,
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
@@ -129,12 +130,24 @@ pub struct VulkanRenderer {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     render_pass: Arc<RenderPass>,
     pipeline: VulkanPipeline,
+    last_colour_image: RefCell<Option<Arc<Image>>>,
 }
 
 impl VulkanRenderer {
+    pub fn from_display(
+        display: &crate::renderer::vulkan::display::VulkanDisplay,
+    ) -> Result<Self, VulkanRendererError> {
+        let device = display.shared_device();
+        let queue = display.shared_queue();
+        Self::from_device(device, queue)
+    }
+
     pub fn new() -> Result<Self, VulkanRendererError> {
         let (device, queue) = get_device(DeviceExtensions::empty())?;
+        Self::from_device(device, queue)
+    }
 
+    fn from_device(device: Arc<Device>, queue: Arc<Queue>) -> Result<Self, VulkanRendererError> {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             device.clone(),
@@ -177,6 +190,7 @@ impl VulkanRenderer {
             descriptor_set_allocator,
             render_pass,
             pipeline,
+            last_colour_image: RefCell::new(None),
         })
     }
 
@@ -310,25 +324,6 @@ impl VulkanRenderer {
         .unwrap()
     }
 
-    fn draw_to_framebuffer(staging_buffer: Subbuffer<[u8]>, framebuffer: &Framebuffer) {
-        let buffer_content = staging_buffer.read().unwrap();
-        for y in 0..framebuffer.height {
-            for x in 0..framebuffer.width {
-                let idx = (y * framebuffer.width + x) * 4;
-                framebuffer.set_pixel(
-                    x,
-                    y,
-                    [
-                        buffer_content[idx],
-                        buffer_content[idx + 1],
-                        buffer_content[idx + 2],
-                        buffer_content[idx + 3],
-                    ],
-                );
-            }
-        }
-    }
-
     fn render_with_pipeline(
         &self,
         vk_pipeline: &Arc<GraphicsPipeline>,
@@ -341,7 +336,7 @@ impl VulkanRenderer {
         let width = framebuffer.width as u32;
         let height = framebuffer.height as u32;
 
-        let color_image = Image::new(
+        let colour_image = Image::new(
             self.memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
@@ -375,7 +370,7 @@ impl VulkanRenderer {
         )
         .unwrap();
 
-        let color_view = ImageView::new_default(color_image.clone()).unwrap();
+        let color_view = ImageView::new_default(colour_image.clone()).unwrap();
         let depth_view = ImageView::new_default(depth_image).unwrap();
 
         let vk_framebuffer = VkFramebuffer::new(
@@ -384,21 +379,6 @@ impl VulkanRenderer {
                 attachments: vec![color_view, depth_view],
                 ..Default::default()
             },
-        )
-        .unwrap();
-
-        let staging_buffer: Subbuffer<[u8]> = Buffer::new_slice(
-            self.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::TRANSFER_DST,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
-                ..Default::default()
-            },
-            (width * height * 4) as u64,
         )
         .unwrap();
 
@@ -432,7 +412,7 @@ impl VulkanRenderer {
         builder
             .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
                 upload_buffer,
-                color_image.clone(),
+                colour_image.clone(),
             ))
             .unwrap();
 
@@ -512,14 +492,7 @@ impl VulkanRenderer {
             }
         }
 
-        builder
-            .end_render_pass(SubpassEndInfo::default())
-            .unwrap()
-            .copy_image_to_buffer(CopyImageToBufferInfo::image_buffer(
-                color_image,
-                staging_buffer.clone(),
-            ))
-            .unwrap();
+        builder.end_render_pass(SubpassEndInfo::default()).unwrap();
 
         let command_buffer = builder.build().unwrap();
 
@@ -531,16 +504,24 @@ impl VulkanRenderer {
             .wait(None)
             .unwrap();
 
-        Self::draw_to_framebuffer(staging_buffer, framebuffer);
+        *self.last_colour_image.borrow_mut() = Some(colour_image);
 
         vec![("Triangle Count", triangle_count.to_string())]
+    }
+
+    pub fn take_vk_image(&self) -> Option<Arc<Image>> {
+        self.last_colour_image.borrow_mut().take()
+    }
+}
+
+impl Default for VulkanRenderer {
+    fn default() -> Self {
+        Self::new().expect("Failed to create Vulkan renderer")
     }
 }
 
 pub fn into_active() -> super::ActiveRenderer {
-    super::ActiveRenderer::Vulkan(Box::new(
-        VulkanRenderer::new().expect("Failed to create Vulkan renderer"),
-    ))
+    super::ActiveRenderer::Vulkan(Box::default())
 }
 
 impl Renderer for VulkanRenderer {

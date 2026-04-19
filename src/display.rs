@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 pub trait Display {
     fn present_cpu_frame(&self, pixels: &[u8]);
+    fn present_vk_frame(&self, _image: &Arc<vulkano::image::Image>, _overlay: Option<&[u8]>) {
+        panic!("Vulkan frame presentation not supported by this display backend");
+    }
     fn present_gpu_frame(&self, _gpu_view: &wgpu::TextureView, _overlay: Option<&[u8]>) {
         panic!("GPU frame presentation not supported by this display backend");
     }

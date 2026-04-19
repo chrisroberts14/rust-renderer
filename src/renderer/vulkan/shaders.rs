@@ -49,6 +49,36 @@ pub(crate) mod vs {
     }
 }
 
+pub(crate) mod overlay_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        src: r"
+            #version 450
+            layout(location = 0) out vec2 tex_coords;
+            void main() {
+                vec2 uv = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
+                gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+                tex_coords = uv;
+            }
+        ",
+    }
+}
+
+pub(crate) mod overlay_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        src: r"
+            #version 450
+            layout(location = 0) in vec2 tex_coords;
+            layout(location = 0) out vec4 out_color;
+            layout(set = 0, binding = 0) uniform sampler2D overlay;
+            void main() {
+                out_color = texture(overlay, tex_coords);
+            }
+        ",
+    }
+}
+
 /// Fragment shader
 /// This runs once per pixel of every triangle
 /// Job is to figure out what colour a given pixel should be

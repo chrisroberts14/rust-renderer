@@ -16,6 +16,8 @@ use crate::overlay::OverlayManager;
 use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::ActiveRenderer;
 use crate::renderer::cpu::display::CpuDisplay;
+use crate::renderer::vulkan::VulkanRenderer;
+use crate::renderer::vulkan::display::VulkanDisplay;
 use crate::renderer::wgsl::GpuRasterRenderer;
 use crate::renderer::wgsl::display::WgslDisplay;
 use crate::scenes::scene::Scene;
@@ -79,6 +81,14 @@ impl App {
                 let wgsl = WgslDisplay::new(window, width as usize, height as usize);
                 *renderer = ActiveRenderer::Gpu(Box::new(GpuRasterRenderer::from_display(&wgsl)));
                 Box::new(wgsl)
+            }
+            ActiveRenderer::Vulkan(_) => {
+                let vulkan = VulkanDisplay::new(window, width, height);
+                *renderer = ActiveRenderer::Vulkan(Box::new(
+                    VulkanRenderer::from_display(&vulkan)
+                        .expect("Failed to create Vulkan renderer"),
+                ));
+                Box::new(vulkan)
             }
             _ => Box::new(CpuDisplay::new(window, width, height)),
         }
@@ -284,6 +294,17 @@ impl ApplicationHandler for App {
                     });
                     self.display_ref()
                         .present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
+                } else if let Some(image) = self.renderer.take_vk_image() {
+                    let overlay = self.scene.settings.show_overlay.then(|| {
+                        let mut fb = Framebuffer::new(
+                            self.scene.framebuffer.width,
+                            self.scene.framebuffer.height,
+                        );
+                        self.overlays.write_to_framebuffer(&mut fb);
+                        fb
+                    });
+                    self.display_ref()
+                        .present_vk_frame(&image, overlay.as_ref().map(|fb| fb.as_bytes()));
                 } else {
                     if self.scene.settings.show_overlay {
                         self.overlays
