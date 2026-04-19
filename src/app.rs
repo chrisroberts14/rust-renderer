@@ -7,9 +7,9 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowAttributes};
 
 use crate::display::Display;
+use crate::file::SceneFileWatcher;
 use crate::file::file_iter::FileIter;
 use crate::file::key_bindings_file::{Action, KeyBindings};
-use crate::file::scene_file::SceneFile;
 use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
 use crate::overlay::OverlayManager;
@@ -20,7 +20,6 @@ use crate::renderer::vulkan::VulkanRenderer;
 use crate::renderer::vulkan::display::VulkanDisplay;
 use crate::renderer::wgsl::WGSLRenderer;
 use crate::renderer::wgsl::display::WgslDisplay;
-use crate::scenes::scene::Scene;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
 const NORMAL_SPEED: f32 = 0.05;
@@ -28,7 +27,7 @@ const FAST_SPEED: f32 = 0.25;
 
 pub struct App {
     display: Option<Box<dyn Display>>,
-    scene: Scene,
+    scene: SceneFileWatcher,
     fast_move: bool,
     scene_files: Option<FileIter>,
     renderer: ActiveRenderer,
@@ -38,7 +37,7 @@ pub struct App {
 
 impl App {
     pub fn new(
-        scene_option: Option<Scene>,
+        scene_option: Option<SceneFileWatcher>,
         renderer: ActiveRenderer,
         width: f32,
         height: f32,
@@ -53,7 +52,7 @@ impl App {
         } else {
             let mut iter = FileIter::with_extension("assets/scene_defs", "json")?;
             let next = iter.next().ok_or("No scene files found")?;
-            let scene = SceneFile::from_file(next, width, height)?;
+            let scene = SceneFileWatcher::new(next, width, height);
             (scene, Some(iter))
         };
 
@@ -100,9 +99,10 @@ impl App {
         } else {
             NORMAL_SPEED
         };
-        let new_position = self.scene.camera.position + (direction * sign * speed);
-        if !self.scene.is_point_inside_any_object(&new_position) {
-            self.scene.camera.position = new_position;
+        let mut scene = self.scene.scene();
+        let new_position = scene.camera.position + (direction * sign * speed);
+        if !scene.is_point_inside_any_object(&new_position) {
+            scene.camera.position = new_position;
         }
     }
 
@@ -117,41 +117,39 @@ impl App {
     }
 
     fn perform_action(&mut self, action: &Action) -> Result<(), Box<dyn std::error::Error>> {
+        let (forward, right, up) = {
+            let scene = self.scene.scene();
+            (
+                scene.camera.forward(),
+                scene.camera.right(),
+                scene.camera.up(),
+            )
+        };
         match action {
-            Action::MoveForward => {
-                self.move_camera(self.scene.camera.forward(), 1.0);
-            }
-            Action::MoveBackward => {
-                self.move_camera(self.scene.camera.forward(), -1.0);
-            }
-            Action::MoveRight => {
-                self.move_camera(self.scene.camera.right(), 1.0);
-            }
-            Action::MoveLeft => {
-                self.move_camera(self.scene.camera.right(), -1.0);
-            }
-            Action::MoveUp => {
-                self.move_camera(self.scene.camera.up(), 1.0);
-            }
-            Action::MoveDown => {
-                self.move_camera(self.scene.camera.up(), -1.0);
-            }
+            Action::MoveForward => self.move_camera(forward, 1.0),
+            Action::MoveBackward => self.move_camera(forward, -1.0),
+            Action::MoveRight => self.move_camera(right, 1.0),
+            Action::MoveLeft => self.move_camera(right, -1.0),
+            Action::MoveUp => self.move_camera(up, 1.0),
+            Action::MoveDown => self.move_camera(up, -1.0),
             Action::ToggleWireframe => {
-                self.scene.settings.toggle_wire_frame_mode();
+                self.scene.scene().settings.toggle_wire_frame_mode();
             }
             Action::ToggleLights => {
-                self.scene.settings.toggle_render_lights();
+                self.scene.scene().settings.toggle_render_lights();
             }
             Action::NextScene => {
                 if let Some(next_scene) = self.scene_files.as_mut().and_then(|sf| sf.next()) {
-                    let old_settings = self.scene.settings.clone();
-                    let scene = SceneFile::from_file(
-                        next_scene,
-                        self.scene.framebuffer.width as f32,
-                        self.scene.framebuffer.height as f32,
-                    )?;
-                    self.scene = scene;
-                    self.scene.settings = old_settings;
+                    let (old_settings, w, h) = {
+                        let scene = self.scene.scene();
+                        (
+                            scene.settings.clone(),
+                            scene.framebuffer.width as f32,
+                            scene.framebuffer.height as f32,
+                        )
+                    };
+                    self.scene = SceneFileWatcher::new(next_scene, w, h);
+                    self.scene.scene().settings = old_settings;
                 }
             }
             Action::IncreaseTiles => {
@@ -161,15 +159,15 @@ impl App {
                 self.renderer.decrease_tile_count(1);
             }
             Action::ToggleOverlay => {
-                self.scene.settings.toggle_overlay();
+                self.scene.scene().settings.toggle_overlay();
             }
             Action::ReleaseMouse => {
                 self.display_mut().release_mouse()?;
             }
             Action::NextRenderer => {
                 let window = self.display_ref().window();
-                let width = self.scene.framebuffer.width as u32;
-                let height = self.scene.framebuffer.height as u32;
+                let width = self.scene.scene().framebuffer.width as u32;
+                let height = self.scene.scene().framebuffer.height as u32;
 
                 // Drop the current display before creating the new one. The two wgpu stacks
                 // (wgpu 29 for WgslDisplay, wgpu 27 inside pixels for CpuDisplay) can't both
@@ -232,11 +230,18 @@ fn named_key_to_str(key: &NamedKey) -> Option<&'static str> {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &dyn ActiveEventLoop) {
+        let (fb_width, fb_height) = {
+            let scene = self.scene.scene();
+            (
+                scene.framebuffer.width as f32,
+                scene.framebuffer.height as f32,
+            )
+        };
         let attrs = WindowAttributes::default()
             .with_title("rust-renderer")
             .with_surface_size(winit::dpi::PhysicalSize {
-                width: self.scene.framebuffer.width as f32,
-                height: self.scene.framebuffer.height as f32,
+                width: fb_width,
+                height: fb_height,
             });
 
         let window: Arc<dyn Window> = event_loop
@@ -272,56 +277,61 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                let stats = self.scene.render_scene(&self.renderer);
+                let stats = self.scene.scene().render_scene(&self.renderer);
 
-                if self.scene.settings.show_overlay {
+                if self.scene.scene().settings.show_overlay {
                     for (key, val) in &stats {
                         self.overlays.add_stat(key, val);
                     }
-                    for (key, val) in self.scene.settings.as_pairs() {
+                    for (key, val) in self.scene.scene().settings.as_pairs() {
                         self.overlays.add_stat(&key, &val);
                     }
                 }
 
                 if let Some(view) = self.renderer.take_gpu_view() {
-                    let overlay = self.scene.settings.show_overlay.then(|| {
-                        let mut fb = Framebuffer::new(
-                            self.scene.framebuffer.width,
-                            self.scene.framebuffer.height,
-                        );
+                    let show_overlay = self.scene.scene().settings.show_overlay;
+                    let overlay = show_overlay.then(|| {
+                        let (w, h) = {
+                            let scene = self.scene.scene();
+                            (scene.framebuffer.width, scene.framebuffer.height)
+                        };
+                        let mut fb = Framebuffer::new(w, h);
                         self.overlays.write_to_framebuffer(&mut fb);
                         fb
                     });
                     self.display_ref()
                         .present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
                 } else if let Some(image) = self.renderer.take_vk_image() {
-                    let overlay = self.scene.settings.show_overlay.then(|| {
-                        let mut fb = Framebuffer::new(
-                            self.scene.framebuffer.width,
-                            self.scene.framebuffer.height,
-                        );
+                    let show_overlay = self.scene.scene().settings.show_overlay;
+                    let overlay = show_overlay.then(|| {
+                        let (w, h) = {
+                            let scene = self.scene.scene();
+                            (scene.framebuffer.width, scene.framebuffer.height)
+                        };
+                        let mut fb = Framebuffer::new(w, h);
                         self.overlays.write_to_framebuffer(&mut fb);
                         fb
                     });
                     self.display_ref()
                         .present_vk_frame(&image, overlay.as_ref().map(|fb| fb.as_bytes()));
                 } else {
-                    if self.scene.settings.show_overlay {
-                        self.overlays
-                            .write_to_framebuffer(&mut self.scene.framebuffer);
+                    let mut scene = self.scene.scene();
+                    if scene.settings.show_overlay {
+                        self.overlays.write_to_framebuffer(&mut scene.framebuffer);
                     }
                     self.display_ref()
-                        .present_cpu_frame(self.scene.framebuffer.as_bytes());
+                        .present_cpu_frame(scene.framebuffer.as_bytes());
                 }
 
                 self.display_ref().request_redraw();
             }
             WindowEvent::SurfaceResized(new_size) => {
                 self.display_mut().resize(new_size.width, new_size.height);
-                self.scene
+                let mut scene = self.scene.scene();
+                scene
                     .framebuffer
                     .resize(new_size.width as usize, new_size.height as usize);
-                self.scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
+                scene.camera.aspect_ratio = new_size.width as f32 / new_size.height as f32;
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
@@ -358,7 +368,10 @@ impl ApplicationHandler for App {
         if let DeviceEvent::PointerMotion { delta: (dx, dy) } = event
             && self.display_ref().is_cursor_grabbed()
         {
-            self.scene.camera.process_mouse(dx as f32, dy as f32);
+            self.scene
+                .scene()
+                .camera
+                .process_mouse(dx as f32, dy as f32);
         }
     }
 }

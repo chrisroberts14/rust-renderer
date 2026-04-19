@@ -4,6 +4,7 @@ use clap::Parser;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 use rust_renderer::app::App;
+use rust_renderer::file::SceneFileWatcher;
 use rust_renderer::renderer::RendererChoice;
 
 #[derive(Parser)]
@@ -33,11 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let scene = if let Some(scene_path) = args.scene {
-        Some(rust_renderer::file::scene_file::SceneFile::from_file(
-            scene_path,
-            args.width,
-            args.height,
-        )?)
+        Some(SceneFileWatcher::new(scene_path, args.width, args.height))
     } else {
         None
     };
