@@ -1,6 +1,6 @@
 use crate::scenes::camera::Camera;
 
-use super::Vert;
+use crate::renderer::Vert;
 
 fn interpolate_vert(a: Vert, b: Vert, t: f32) -> Vert {
     Vert {
@@ -39,7 +39,7 @@ fn clip_polygon_against_plane(polygon: &[Vert], nx: f32, ny: f32, nz: f32, d: f3
 /// Clips a triangle against all 6 frustum planes and returns the resulting triangles.
 /// Eliminates any vertex that would project far outside the screen, preventing the
 /// f32 precision failures that occur with very large screen-space triangles.
-pub(super) fn clip_to_frustum(triangle: [Vert; 3], camera: &Camera) -> Vec<[Vert; 3]> {
+pub(in crate::renderer) fn clip_to_frustum(triangle: [Vert; 3], camera: &Camera) -> Vec<[Vert; 3]> {
     let tan_y = (camera.fov * 0.5).tan();
     let tan_x = camera.aspect_ratio * tan_y;
     // Each plane: (nx, ny, nz, d) — inside when nx*x + ny*y + nz*z + d >= 0 in camera space.

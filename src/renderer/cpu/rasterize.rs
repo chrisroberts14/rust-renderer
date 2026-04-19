@@ -1,14 +1,14 @@
 use crate::framebuffer::Framebuffer;
 use crate::geometry::triangle::Triangle;
-use crate::renderer::tile::Tile;
+use crate::renderer::cpu::tile::Tile;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use std::sync::Arc;
 
-use super::PreparedTriangle;
-use super::shade::shade;
-use super::shadow_map::ShadowMap;
+use crate::renderer::PreparedTriangle;
+use crate::renderer::cpu::shade::shade;
+use crate::renderer::shadow_map::ShadowMap;
 
 /// All shading inputs needed to light a fragment: lights, their shadow maps, and ambient level.
 /// Bundled to keep `rasterize_tile`'s argument count manageable.

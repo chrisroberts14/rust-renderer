@@ -3,11 +3,11 @@ use crate::geometry::object::Object;
 use crate::geometry::triangle::Triangle;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
-use crate::renderer::tile::{Tile, make_tiles};
+use crate::renderer::cpu::tile::{Tile, make_tiles};
 use crate::scenes::camera::Camera;
 
-use super::clip::clip_to_frustum;
-use super::{PreparedTriangle, Vert};
+use crate::renderer::cpu::clip::clip_to_frustum;
+use crate::renderer::{PreparedTriangle, Vert};
 
 /// Shared setup for raster rendering: transforms objects into prepared triangles, builds the tile
 /// grid, and bins triangles into tiles. Both raster renderers call this, then differ only in
@@ -35,7 +35,7 @@ pub(crate) fn prepare_render(
 
 /// Geometry pass: transforms, clips, projects, and backface-culls all faces of an object.
 /// Returns a flat list of screen-ready triangles with no framebuffer writes.
-pub(super) fn prepare_object(
+pub(in crate::renderer) fn prepare_object(
     object: &Object,
     width: f32,
     height: f32,
@@ -125,7 +125,7 @@ pub(super) fn prepare_object(
 
 /// Binning pass: assigns each triangle to every tile whose bounds overlap its screen bounding box.
 /// Returns one `Vec<usize>` per tile, containing indices into `triangles`.
-pub(super) fn bin_triangles(
+pub(in crate::renderer) fn bin_triangles(
     triangles: &[PreparedTriangle],
     tiles: &[Tile],
     screen_width: usize,

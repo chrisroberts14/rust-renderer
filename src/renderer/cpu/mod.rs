@@ -1,13 +1,18 @@
+mod clip;
 pub mod display;
+pub(crate) mod prepare;
+pub(crate) mod rasterize;
+pub mod shade;
+pub mod tile;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
 use crate::renderer::Renderer;
-use crate::renderer::prepare::prepare_render;
-use crate::renderer::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
+use crate::renderer::cpu::rasterize::{ShadingContext, draw_wireframe, rasterize_tile};
 use crate::renderer::shadow_map::build_shadow_map;
 use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
+use prepare::prepare_render;
 use rayon::prelude::*;
 use std::sync::Arc;
 

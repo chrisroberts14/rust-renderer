@@ -2,9 +2,9 @@ use crate::maths::vec3::Vec3;
 use crate::scenes::lights::Light;
 use std::sync::Arc;
 
-use super::shadow_map::ShadowMap;
+use crate::renderer::shadow_map::ShadowMap;
 
-pub(super) const SHININESS: i32 = 32;
+pub(in crate::renderer) const SHININESS: i32 = 32;
 
 /// Computes the Phong light multiplier [r, g, b] for a surface point.
 /// Returns [1.0; 3] when there are no lights (unlit rendering).

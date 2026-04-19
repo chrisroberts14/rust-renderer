@@ -1,10 +1,5 @@
-mod clip;
 pub mod cpu;
-pub(crate) mod prepare;
-pub(crate) mod rasterize;
-mod shade;
 pub(crate) mod shadow_map;
-pub mod tile;
 pub mod vulkan;
 pub mod wgsl;
 
@@ -25,7 +20,7 @@ use std::sync::Arc;
 use strum_macros::Display;
 use wgpu;
 
-pub use shade::shade;
+pub use cpu::shade::shade;
 
 /// CLI argument type for selecting an initial renderer.
 /// Once a renderer is implemented it will need to be "registered" here.
