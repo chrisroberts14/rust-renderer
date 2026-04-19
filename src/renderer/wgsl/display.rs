@@ -1,11 +1,10 @@
-use crate::display::Display;
+use crate::display::{CursorState, Display};
 use pollster;
 use std::sync::Arc;
-use winit::window::CursorGrabMode;
 
 pub struct WgslDisplay {
     window: Arc<dyn winit::window::Window>,
-    cursor_grabbed: bool,
+    cursor: CursorState,
     pub instance: wgpu::Instance,
     pub surface: wgpu::Surface<'static>,
     pub device: Arc<wgpu::Device>,
@@ -156,7 +155,7 @@ impl WgslDisplay {
 
         Self {
             window,
-            cursor_grabbed: false,
+            cursor: CursorState::new(),
             cpu_texture: Self::create_rgba8_texture(
                 &device,
                 "cpu_framebuffer",
@@ -310,23 +309,11 @@ impl Display for WgslDisplay {
     }
 
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.set_cursor_visible(false);
-        if self
-            .window
-            .set_cursor_grab(CursorGrabMode::Confined)
-            .is_err()
-        {
-            self.window.set_cursor_grab(CursorGrabMode::Locked)?;
-        }
-        self.cursor_grabbed = true;
-        Ok(())
+        self.cursor.capture(&*self.window)
     }
 
     fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.set_cursor_visible(true);
-        self.window.set_cursor_grab(CursorGrabMode::None)?;
-        self.cursor_grabbed = false;
-        Ok(())
+        self.cursor.release(&*self.window)
     }
 
     fn request_redraw(&self) {
@@ -334,7 +321,7 @@ impl Display for WgslDisplay {
     }
 
     fn is_cursor_grabbed(&self) -> bool {
-        self.cursor_grabbed
+        self.cursor.is_grabbed()
     }
 
     fn window(&self) -> Arc<dyn winit::window::Window> {

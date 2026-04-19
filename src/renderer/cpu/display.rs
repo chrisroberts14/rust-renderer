@@ -1,13 +1,12 @@
-use crate::display::Display;
+use crate::display::{CursorState, Display};
 use pixels::{Pixels, SurfaceTexture};
 use std::cell::RefCell;
 use std::sync::Arc;
-use winit::window::CursorGrabMode;
 
 pub struct CpuDisplay {
     window: Arc<dyn winit::window::Window>,
     pixels: RefCell<Pixels<'static>>,
-    cursor_grabbed: bool,
+    cursor: CursorState,
 }
 
 impl CpuDisplay {
@@ -18,7 +17,7 @@ impl CpuDisplay {
         Self {
             window,
             pixels: RefCell::new(pixels),
-            cursor_grabbed: false,
+            cursor: CursorState::new(),
         }
     }
 }
@@ -41,23 +40,11 @@ impl Display for CpuDisplay {
     }
 
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.set_cursor_visible(false);
-        if self
-            .window
-            .set_cursor_grab(CursorGrabMode::Confined)
-            .is_err()
-        {
-            self.window.set_cursor_grab(CursorGrabMode::Locked)?;
-        }
-        self.cursor_grabbed = true;
-        Ok(())
+        self.cursor.capture(&*self.window)
     }
 
     fn release_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.window.set_cursor_visible(true);
-        self.window.set_cursor_grab(CursorGrabMode::None)?;
-        self.cursor_grabbed = false;
-        Ok(())
+        self.cursor.release(&*self.window)
     }
 
     fn request_redraw(&self) {
@@ -65,7 +52,7 @@ impl Display for CpuDisplay {
     }
 
     fn is_cursor_grabbed(&self) -> bool {
-        self.cursor_grabbed
+        self.cursor.is_grabbed()
     }
 
     fn window(&self) -> Arc<dyn winit::window::Window> {
