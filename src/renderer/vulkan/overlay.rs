@@ -31,11 +31,10 @@ use vulkano::render_pass::{
 };
 
 pub(crate) struct VulkanOverlay {
-    overlay_image: Arc<Image>,
+    overlay_images: Vec<Arc<Image>>,
     overlay_render_pass: Arc<RenderPass>,
     overlay_pipeline: Arc<GraphicsPipeline>,
     overlay_sampler: Arc<Sampler>,
-
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
 }
 
@@ -46,22 +45,27 @@ impl VulkanOverlay {
         memory_allocator: Arc<StandardMemoryAllocator>,
         device: Arc<Device>,
         format: Format,
+        num_frames: usize,
     ) -> Self {
-        let overlay_image = Image::new(
-            memory_allocator.clone(),
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_UNORM,
-                extent: [width, height, 1],
-                usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let overlay_images = (0..num_frames)
+            .map(|_| {
+                Image::new(
+                    memory_allocator.clone(),
+                    ImageCreateInfo {
+                        image_type: ImageType::Dim2d,
+                        format: Format::R8G8B8A8_UNORM,
+                        extent: [width, height, 1],
+                        usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+            })
+            .collect();
         let overlay_render_pass = vulkano::single_pass_renderpass!(
             device.clone(),
             attachments: {
@@ -152,7 +156,7 @@ impl VulkanOverlay {
         ));
 
         Self {
-            overlay_image,
+            overlay_images,
             overlay_pipeline,
             overlay_render_pass,
             overlay_sampler,
@@ -168,6 +172,7 @@ impl VulkanOverlay {
         swapchain_image: Arc<Image>,
         width: u32,
         height: u32,
+        frame_idx: usize,
     ) {
         let swapchain_view = ImageView::new_default(swapchain_image).unwrap();
         let framebuffer = VkFramebuffer::new(
@@ -179,7 +184,7 @@ impl VulkanOverlay {
         )
         .unwrap();
 
-        let overlay_view = ImageView::new_default(self.overlay_image.clone()).unwrap();
+        let overlay_view = ImageView::new_default(self.overlay_images[frame_idx].clone()).unwrap();
         let descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
             self.overlay_pipeline.layout().set_layouts()[0].clone(),
@@ -231,7 +236,7 @@ impl VulkanOverlay {
         builder.end_render_pass(SubpassEndInfo::default()).unwrap();
     }
 
-    pub(crate) fn overlay_image(&self) -> Arc<Image> {
-        self.overlay_image.clone()
+    pub(crate) fn overlay_image(&self, frame_idx: usize) -> Arc<Image> {
+        self.overlay_images[frame_idx].clone()
     }
 }

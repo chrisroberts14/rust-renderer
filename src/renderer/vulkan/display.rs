@@ -1,6 +1,7 @@
 use crate::display::{CursorState, Display};
 use crate::renderer::vulkan::device::get_device_for_surface;
 use crate::renderer::vulkan::overlay::VulkanOverlay;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use vulkano::VulkanLibrary;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
@@ -19,6 +20,19 @@ use vulkano::swapchain::{
     SwapchainPresentInfo, acquire_next_image,
 };
 use vulkano::sync::GpuFuture;
+use vulkano::sync::future::FenceSignalFuture;
+
+trait FrameFence {
+    fn wait_idle(self: Box<Self>);
+}
+
+impl<F: GpuFuture> FrameFence for FenceSignalFuture<F> {
+    fn wait_idle(self: Box<Self>) {
+        self.wait(None).unwrap();
+    }
+}
+
+const FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct VulkanDisplay {
     window: Arc<dyn winit::window::Window>,
@@ -31,6 +45,8 @@ pub struct VulkanDisplay {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     image_format: Format,
     overlay: VulkanOverlay,
+    frame_futures: RefCell<Vec<Option<Box<dyn FrameFence>>>>,
+    current_frame: Cell<usize>,
 }
 
 impl VulkanDisplay {
@@ -69,6 +85,7 @@ impl VulkanDisplay {
             memory_allocator.clone(),
             device.clone(),
             image_format,
+            FRAMES_IN_FLIGHT,
         );
 
         Self {
@@ -82,6 +99,8 @@ impl VulkanDisplay {
             command_buffer_allocator,
             image_format,
             overlay,
+            frame_futures: RefCell::new((0..FRAMES_IN_FLIGHT).map(|_| None).collect()),
+            current_frame: Cell::new(0),
         }
     }
 
@@ -183,15 +202,23 @@ impl VulkanDisplay {
         .unwrap()
     }
 
-    /// Submits `command_buffer` after `acquire_future` and presents `image_index` to the
-    /// swapchain, blocking until the GPU signals completion.
-    fn submit_and_present(
+    /// Waits for the oldest in-flight frame to finish, freeing its slot for reuse.
+    fn begin_frame(&self) {
+        let idx = self.current_frame.get() % FRAMES_IN_FLIGHT;
+        if let Some(fence) = self.frame_futures.borrow_mut()[idx].take() {
+            fence.wait_idle();
+        }
+    }
+
+    /// Submits the frame and stores its fence; the CPU returns immediately.
+    fn end_frame(
         &self,
         acquire_future: SwapchainAcquireFuture,
         command_buffer: Arc<PrimaryAutoCommandBuffer>,
         image_index: u32,
     ) {
-        acquire_future
+        let idx = self.current_frame.get() % FRAMES_IN_FLIGHT;
+        let fence = acquire_future
             .then_execute(self.queue.clone(), command_buffer)
             .unwrap()
             .then_swapchain_present(
@@ -199,9 +226,9 @@ impl VulkanDisplay {
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
             .then_signal_fence_and_flush()
-            .unwrap()
-            .wait(None)
             .unwrap();
+        self.frame_futures.borrow_mut()[idx] = Some(Box::new(fence));
+        self.current_frame.set(self.current_frame.get() + 1);
     }
 }
 
@@ -222,8 +249,8 @@ impl Display for VulkanDisplay {
             _ => pixels,
         };
 
+        self.begin_frame();
         let staging = self.create_rgba_staging_buffer(width, height, data);
-
         let (image_index, _suboptimal, acquire_future) =
             acquire_next_image(self.swapchain.clone(), None).unwrap();
         let target_image = self.images[image_index as usize].clone();
@@ -233,12 +260,14 @@ impl Display for VulkanDisplay {
             .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(staging, target_image))
             .unwrap();
 
-        let command_buffer = builder.build().unwrap();
-        self.submit_and_present(acquire_future, command_buffer, image_index);
+        self.end_frame(acquire_future, builder.build().unwrap(), image_index);
     }
 
     fn present_vk_frame(&self, image: &Arc<Image>, overlay: Option<&[u8]>) {
         let [width, height] = self.swapchain.image_extent();
+
+        self.begin_frame();
+        let frame_idx = self.current_frame.get() % FRAMES_IN_FLIGHT;
         let (image_index, _suboptimal, acquire_future) =
             acquire_next_image(self.swapchain.clone(), None).unwrap();
         let target_image = self.images[image_index as usize].clone();
@@ -250,7 +279,7 @@ impl Display for VulkanDisplay {
             builder
                 .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
                     staging,
-                    self.overlay.overlay_image(),
+                    self.overlay.overlay_image(frame_idx),
                 ))
                 .unwrap();
         }
@@ -261,14 +290,18 @@ impl Display for VulkanDisplay {
 
         if overlay.is_some() {
             self.overlay
-                .record_overlay_pass(&mut builder, target_image, width, height);
+                .record_overlay_pass(&mut builder, target_image, width, height, frame_idx);
         }
 
-        let command_buffer = builder.build().unwrap();
-        self.submit_and_present(acquire_future, command_buffer, image_index);
+        self.end_frame(acquire_future, builder.build().unwrap(), image_index);
     }
 
     fn resize(&mut self, width: u32, height: u32) {
+        for slot in self.frame_futures.get_mut() {
+            if let Some(fence) = slot.take() {
+                fence.wait_idle();
+            }
+        }
         let (new_swapchain, new_images) = self
             .swapchain
             .recreate(SwapchainCreateInfo {
@@ -284,6 +317,7 @@ impl Display for VulkanDisplay {
             self.memory_allocator.clone(),
             self.device.clone(),
             self.image_format,
+            FRAMES_IN_FLIGHT,
         );
     }
 
