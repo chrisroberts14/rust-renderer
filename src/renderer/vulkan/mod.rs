@@ -1,5 +1,6 @@
 mod device;
 pub mod display;
+mod overlay;
 mod pipeline;
 mod shaders;
 
