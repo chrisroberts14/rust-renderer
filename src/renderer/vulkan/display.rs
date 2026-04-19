@@ -43,13 +43,7 @@ use vulkano::swapchain::{
 use vulkano::sync::GpuFuture;
 
 pub struct VulkanDisplay {
-    #[allow(dead_code)]
     window: Arc<dyn winit::window::Window>,
-    #[allow(dead_code)]
-    instance: Arc<Instance>,
-    #[allow(dead_code)]
-    surface: Arc<Surface>,
-    #[allow(dead_code)]
     device: Arc<Device>,
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
@@ -114,8 +108,6 @@ impl VulkanDisplay {
 
         Self {
             window,
-            instance,
-            surface,
             device,
             queue,
             swapchain,
