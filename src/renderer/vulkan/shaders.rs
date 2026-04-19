@@ -123,6 +123,14 @@ pub(crate) mod fs {
                 uint light_count;
             };
 
+            layout(set = 0, binding = 2) uniform ShadowBlock {
+                mat4 spot_light_space[8];
+                float point_far_plane;
+            };
+
+            layout(set = 0, binding = 3) uniform sampler2DArray spot_shadow_maps;
+            layout(set = 0, binding = 4) uniform samplerCubeArray point_shadow_maps;
+
             void main() {
                 vec3 n = normalize(frag_normal);
                 vec4 base = frag_color;
@@ -162,7 +170,45 @@ pub(crate) mod fs {
                         }
                     }
 
-                    vec3  lcol  = lights[i].color.xyz * (dist_atten * cone_atten);
+                    float shadow = 1.0;
+                    if (cone_angle > 0.0) {
+                        vec4 lsp = spot_light_space[i] * vec4(frag_world_pos, 1.0);
+                        vec3 proj_coords = lsp.xyz / lsp.w;
+                        vec2 uv = proj_coords.xy * 0.5 + 0.5;
+                        if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && proj_coords.z >= 0.0) {
+                            float current_depth = length(frag_world_pos - lpos) / point_far_plane;
+                            float bias = 0.005;
+                            float shadow_sum = 0.0;
+                            vec2 texel = vec2(1.0) / vec2(textureSize(spot_shadow_maps, 0).xy);
+                            for (int dx = -1; dx <= 1; dx++) {
+                                for (int dy = -1; dy <= 1; dy++) {
+                                    float s = texture(spot_shadow_maps, vec3(uv + vec2(float(dx), float(dy)) * texel, float(i))).r;
+                                    shadow_sum += (current_depth - bias) > s ? 1.0 : 0.0;
+                                }
+                            }
+                            shadow = 1.0 - shadow_sum / 9.0;
+                        }
+                    } else {
+                        vec3 dir = frag_world_pos - lpos;
+                        float current_depth = length(dir) / point_far_plane;
+                        float bias = 0.05;
+                        float shadow_sum = 0.0;
+                        float off = 0.05;
+                        vec3 offsets[9] = vec3[9](
+                            vec3( 0.0,  0.0,  0.0),
+                            vec3( off,  0.0,  0.0), vec3(-off,  0.0,  0.0),
+                            vec3( 0.0,  off,  0.0), vec3( 0.0, -off,  0.0),
+                            vec3( 0.0,  0.0,  off), vec3( 0.0,  0.0, -off),
+                            vec3( off,  off,  0.0), vec3(-off, -off,  0.0)
+                        );
+                        for (int k = 0; k < 9; k++) {
+                            float s = texture(point_shadow_maps, vec4(dir + offsets[k], float(i))).r;
+                            shadow_sum += (current_depth - bias) > s ? 1.0 : 0.0;
+                        }
+                        shadow = 1.0 - shadow_sum / 9.0;
+                    }
+
+                    vec3  lcol  = lights[i].color.xyz * (dist_atten * cone_atten * shadow);
                     vec3  ldir  = normalize(diff_vec);
                     float ndotl = max(dot(n, ldir), 0.0);
                     diffuse    += ndotl * lcol;
@@ -177,6 +223,47 @@ pub(crate) mod fs {
                 float inv_amb = 1.0 - ambient;
                 vec3  lit = clamp(vec3(ambient) + inv_amb * diffuse + specular, 0.0, 1.0);
                 out_color = vec4(base.rgb * lit, base.a);
+            }
+        ",
+    }
+}
+
+pub(crate) mod shadow_vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        src: r"
+            #version 450
+            layout(location = 0) in vec3 position;
+            layout(location = 0) out vec3 frag_world_pos;
+            layout(set = 0, binding = 0) uniform ShadowUniforms {
+                mat4 light_vp;
+                mat4 model;
+                vec4 light_pos;
+                float shadow_far;
+            };
+            void main() {
+                vec4 world_pos = model * vec4(position, 1.0);
+                frag_world_pos = world_pos.xyz;
+                gl_Position = light_vp * world_pos;
+            }
+        ",
+    }
+}
+
+pub(crate) mod shadow_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        src: r"
+            #version 450
+            layout(location = 0) in vec3 frag_world_pos;
+            layout(set = 0, binding = 0) uniform ShadowUniforms {
+                mat4 light_vp;
+                mat4 model;
+                vec4 light_pos;
+                float shadow_far;
+            };
+            void main() {
+                gl_FragDepth = length(frag_world_pos - light_pos.xyz) / shadow_far;
             }
         ",
     }

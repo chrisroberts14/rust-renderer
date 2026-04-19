@@ -95,6 +95,7 @@ pub fn get_device(
             }],
             enabled_features: DeviceFeatures {
                 fill_mode_non_solid: true,
+                image_cube_array: true,
                 ..Default::default()
             },
             enabled_extensions: required_extensions,
@@ -145,6 +146,7 @@ pub fn get_device_for_surface(
             }],
             enabled_features: DeviceFeatures {
                 fill_mode_non_solid: true,
+                image_cube_array: true,
                 ..Default::default()
             },
             enabled_extensions: required_extensions,

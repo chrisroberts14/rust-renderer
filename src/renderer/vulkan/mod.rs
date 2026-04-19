@@ -3,6 +3,7 @@ pub mod display;
 mod overlay;
 mod pipeline;
 mod shaders;
+mod shadow;
 
 use bytemuck::{Pod, Zeroable};
 use std::cell::RefCell;
@@ -13,15 +14,19 @@ use vulkano::buffer::{
 };
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{
-    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, RenderPassBeginInfo,
-    SubpassBeginInfo, SubpassContents, SubpassEndInfo,
+    AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryAutoCommandBuffer,
+    RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo,
 };
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::Format;
-use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
+use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo};
+use vulkano::image::view::{ImageView, ImageViewCreateInfo, ImageViewType};
+use vulkano::image::{
+    Image, ImageAspects, ImageCreateFlags, ImageCreateInfo, ImageSubresourceRange, ImageType,
+    ImageUsage,
+};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::GraphicsPipeline;
 use vulkano::pipeline::graphics::vertex_input::Vertex;
@@ -64,6 +69,12 @@ pub enum VulkanRendererError {
 }
 
 const MAX_LIGHTS: usize = 8;
+
+struct UploadedMesh<'a> {
+    object: &'a Object,
+    vertex_buffer: Subbuffer<[VulkanVertex]>,
+    index_buffer: Subbuffer<[u32]>,
+}
 
 #[derive(BufferContents, Vertex)]
 #[repr(C)]
@@ -131,6 +142,11 @@ pub struct VulkanRenderer {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     render_pass: Arc<RenderPass>,
     pipeline: VulkanPipeline,
+    shadow_render_pass: Arc<RenderPass>,
+    shadow_pipeline: Arc<GraphicsPipeline>,
+    shadow_sampler: Arc<Sampler>,
+    shadow_spot_image: Arc<Image>,
+    shadow_point_image: Arc<Image>,
     last_colour_image: RefCell<Option<Arc<Image>>>,
 }
 
@@ -183,6 +199,55 @@ impl VulkanRenderer {
 
         let pipeline = VulkanPipeline::new(device.clone(), render_pass.clone())?;
 
+        let shadow_render_pass = shadow::create_shadow_render_pass(device.clone());
+        let shadow_pipeline =
+            shadow::create_shadow_pipeline(device.clone(), shadow_render_pass.clone());
+        let shadow_sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Nearest,
+                min_filter: Filter::Nearest,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let shadow_spot_image = Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D32_SFLOAT,
+                extent: [shadow::SHADOW_MAP_SIZE, shadow::SHADOW_MAP_SIZE, 1],
+                array_layers: MAX_LIGHTS as u32,
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let shadow_point_image = Image::new(
+            memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D32_SFLOAT,
+                extent: [shadow::SHADOW_MAP_SIZE, shadow::SHADOW_MAP_SIZE, 1],
+                array_layers: MAX_LIGHTS as u32 * 6,
+                flags: ImageCreateFlags::CUBE_COMPATIBLE,
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
         Ok(VulkanRenderer {
             device,
             queue,
@@ -191,68 +256,83 @@ impl VulkanRenderer {
             descriptor_set_allocator,
             render_pass,
             pipeline,
+            shadow_render_pass,
+            shadow_pipeline,
+            shadow_sampler,
+            shadow_spot_image,
+            shadow_point_image,
             last_colour_image: RefCell::new(None),
         })
     }
 
-    fn upload_object(&self, obj: &Object) -> (Subbuffer<[VulkanVertex]>, Subbuffer<[u32]>) {
-        let mut verts: Vec<VulkanVertex> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
+    fn upload_objects<'a>(&self, objects: &'a [Object]) -> Vec<UploadedMesh<'a>> {
+        objects
+            .iter()
+            .filter(|obj| !obj.mesh.faces.is_empty())
+            .map(|obj| {
+                let mut verts: Vec<VulkanVertex> = Vec::new();
+                let mut indices: Vec<u32> = Vec::new();
 
-        for &(i0, i1, i2) in obj.mesh.faces.iter() {
-            let base = verts.len() as u32;
-            for vi in [i0, i1, i2] {
-                let pos = obj.mesh.vertices[vi];
-                let nor = obj.mesh.normals[vi];
-                let color = match &obj.material {
-                    Material::Color([r, g, b, a]) => [
-                        *r as f32 / 255.0,
-                        *g as f32 / 255.0,
-                        *b as f32 / 255.0,
-                        *a as f32 / 255.0,
-                    ],
-                    Material::Texture(_) => [1.0, 1.0, 1.0, 1.0],
-                };
-                verts.push(VulkanVertex {
-                    position: [pos.x, pos.y, pos.z],
-                    normal: [nor.x, nor.y, nor.z],
-                    color,
-                });
-            }
-            indices.extend_from_slice(&[base, base + 1, base + 2]);
-        }
+                for &(i0, i1, i2) in obj.mesh.faces.iter() {
+                    let base = verts.len() as u32;
+                    for vi in [i0, i1, i2] {
+                        let pos = obj.mesh.vertices[vi];
+                        let nor = obj.mesh.normals[vi];
+                        let color = match &obj.material {
+                            Material::Color([r, g, b, a]) => [
+                                *r as f32 / 255.0,
+                                *g as f32 / 255.0,
+                                *b as f32 / 255.0,
+                                *a as f32 / 255.0,
+                            ],
+                            Material::Texture(_) => [1.0, 1.0, 1.0, 1.0],
+                        };
+                        verts.push(VulkanVertex {
+                            position: [pos.x, pos.y, pos.z],
+                            normal: [nor.x, nor.y, nor.z],
+                            color,
+                        });
+                    }
+                    indices.extend_from_slice(&[base, base + 1, base + 2]);
+                }
 
-        let vertex_buffer = Buffer::from_iter(
-            self.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            verts,
-        )
-        .unwrap();
+                let vertex_buffer = Buffer::from_iter(
+                    self.memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::VERTEX_BUFFER,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                    },
+                    verts,
+                )
+                .unwrap();
 
-        let index_buffer = Buffer::from_iter(
-            self.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            indices,
-        )
-        .unwrap();
+                let index_buffer = Buffer::from_iter(
+                    self.memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::INDEX_BUFFER,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                    },
+                    indices,
+                )
+                .unwrap();
 
-        (vertex_buffer, index_buffer)
+                UploadedMesh {
+                    object: obj,
+                    vertex_buffer,
+                    index_buffer,
+                }
+            })
+            .collect()
     }
 
     fn build_uniforms(&self, obj: &Object, camera: &Camera, ambient: f32) -> Subbuffer<VkUniforms> {
@@ -325,10 +405,317 @@ impl VulkanRenderer {
         .unwrap()
     }
 
+    fn build_shadow_block(&self, lights: &[Arc<dyn Light>]) -> Subbuffer<shadow::VkShadowBlock> {
+        let mut block = shadow::VkShadowBlock {
+            spot_light_space: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
+            point_far_plane: shadow::SHADOW_FAR,
+            _pad: [0.0; 3],
+        };
+        for (i, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
+            if let Some(dir) = light.spot_direction() {
+                let pos = light.position();
+                let up = shadow::spot_up_vector(dir);
+                let view = shadow::look_at(pos, pos + dir, up);
+                let proj = vk_perspective(light.cone_angle() * 2.0, 1.0, 0.1, shadow::SHADOW_FAR);
+                block.spot_light_space[i] = mat4_to_cols(proj * view);
+            }
+        }
+        Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            block,
+        )
+        .unwrap()
+    }
+
+    fn render_shadow_pass(
+        &self,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+        uploaded: &[UploadedMesh<'_>],
+        lights: &[Arc<dyn Light>],
+    ) -> shadow::ShadowMaps {
+        let spot_image = &self.shadow_spot_image;
+        let point_image = &self.shadow_point_image;
+
+        let cube_proj = vk_perspective(std::f32::consts::FRAC_PI_2, 1.0, 0.1, shadow::SHADOW_FAR);
+
+        let viewport = Viewport {
+            offset: [0.0, 0.0],
+            extent: [
+                shadow::SHADOW_MAP_SIZE as f32,
+                shadow::SHADOW_MAP_SIZE as f32,
+            ],
+            depth_range: 0.0..=1.0,
+        };
+
+        // Spot shadow passes — one render pass per light slot.
+        for i in 0..MAX_LIGHTS {
+            let spot_data = lights.get(i).and_then(|l| {
+                l.spot_direction().map(|dir| {
+                    let pos = l.position();
+                    let up = shadow::spot_up_vector(dir);
+                    let view = shadow::look_at(pos, pos + dir, up);
+                    let proj = vk_perspective(l.cone_angle() * 2.0, 1.0, 0.1, shadow::SHADOW_FAR);
+                    (proj * view, pos)
+                })
+            });
+
+            let layer_view = ImageView::new(
+                spot_image.clone(),
+                ImageViewCreateInfo {
+                    view_type: ImageViewType::Dim2d,
+                    subresource_range: ImageSubresourceRange {
+                        aspects: ImageAspects::DEPTH,
+                        mip_levels: 0..1,
+                        array_layers: i as u32..i as u32 + 1,
+                    },
+                    ..ImageViewCreateInfo::from_image(spot_image)
+                },
+            )
+            .unwrap();
+
+            let fb = VkFramebuffer::new(
+                self.shadow_render_pass.clone(),
+                FramebufferCreateInfo {
+                    attachments: vec![layer_view],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            builder
+                .begin_render_pass(
+                    RenderPassBeginInfo {
+                        clear_values: vec![Some(1.0f32.into())],
+                        ..RenderPassBeginInfo::framebuffer(fb)
+                    },
+                    SubpassBeginInfo {
+                        contents: SubpassContents::Inline,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+            if let Some((light_vp, light_pos)) = spot_data {
+                builder
+                    .set_viewport(0, [viewport.clone()].into_iter().collect())
+                    .unwrap()
+                    .bind_pipeline_graphics(self.shadow_pipeline.clone())
+                    .unwrap();
+
+                for mesh in uploaded {
+                    let (model, _) = mesh.object.transform.matrices();
+                    let uniforms = shadow::VkShadowUniforms {
+                        light_vp: mat4_to_cols(light_vp),
+                        model: mat4_to_cols(model),
+                        light_pos: [light_pos.x, light_pos.y, light_pos.z, 0.0],
+                        shadow_far: shadow::SHADOW_FAR,
+                        _pad: [0.0; 3],
+                    };
+                    let ubuf = Buffer::from_data(
+                        self.memory_allocator.clone(),
+                        BufferCreateInfo {
+                            usage: BufferUsage::UNIFORM_BUFFER,
+                            ..Default::default()
+                        },
+                        AllocationCreateInfo {
+                            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                            ..Default::default()
+                        },
+                        uniforms,
+                    )
+                    .unwrap();
+                    let ds = DescriptorSet::new(
+                        self.descriptor_set_allocator.clone(),
+                        self.shadow_pipeline.layout().set_layouts()[0].clone(),
+                        [WriteDescriptorSet::buffer(0, ubuf)],
+                        [],
+                    )
+                    .unwrap();
+                    builder
+                        .bind_descriptor_sets(
+                            PipelineBindPoint::Graphics,
+                            self.shadow_pipeline.layout().clone(),
+                            0,
+                            ds,
+                        )
+                        .unwrap()
+                        .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+                        .unwrap()
+                        .bind_index_buffer(mesh.index_buffer.clone())
+                        .unwrap();
+                    unsafe {
+                        builder
+                            .draw_indexed(mesh.index_buffer.len() as u32, 1, 0, 0, 0)
+                            .unwrap();
+                    }
+                }
+            }
+
+            builder.end_render_pass(SubpassEndInfo::default()).unwrap();
+        }
+
+        // Point shadow passes — 6 render passes per light slot (one per cube face).
+        for i in 0..MAX_LIGHTS {
+            let point_data = lights.get(i).and_then(|l| {
+                if l.spot_direction().is_none() {
+                    let pos = l.position();
+                    Some((shadow::cube_face_views(pos), pos))
+                } else {
+                    None
+                }
+            });
+
+            for face in 0..6usize {
+                let layer = (i * 6 + face) as u32;
+
+                let layer_view = ImageView::new(
+                    point_image.clone(),
+                    ImageViewCreateInfo {
+                        view_type: ImageViewType::Dim2d,
+                        subresource_range: ImageSubresourceRange {
+                            aspects: ImageAspects::DEPTH,
+                            mip_levels: 0..1,
+                            array_layers: layer..layer + 1,
+                        },
+                        ..ImageViewCreateInfo::from_image(point_image)
+                    },
+                )
+                .unwrap();
+
+                let fb = VkFramebuffer::new(
+                    self.shadow_render_pass.clone(),
+                    FramebufferCreateInfo {
+                        attachments: vec![layer_view],
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+                builder
+                    .begin_render_pass(
+                        RenderPassBeginInfo {
+                            clear_values: vec![Some(1.0f32.into())],
+                            ..RenderPassBeginInfo::framebuffer(fb)
+                        },
+                        SubpassBeginInfo {
+                            contents: SubpassContents::Inline,
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+
+                if let Some((ref views, light_pos)) = point_data {
+                    let light_vp = cube_proj * views[face];
+
+                    builder
+                        .set_viewport(0, [viewport.clone()].into_iter().collect())
+                        .unwrap()
+                        .bind_pipeline_graphics(self.shadow_pipeline.clone())
+                        .unwrap();
+
+                    for mesh in uploaded {
+                        let (model, _) = mesh.object.transform.matrices();
+                        let uniforms = shadow::VkShadowUniforms {
+                            light_vp: mat4_to_cols(light_vp),
+                            model: mat4_to_cols(model),
+                            light_pos: [light_pos.x, light_pos.y, light_pos.z, 0.0],
+                            shadow_far: shadow::SHADOW_FAR,
+                            _pad: [0.0; 3],
+                        };
+                        let ubuf = Buffer::from_data(
+                            self.memory_allocator.clone(),
+                            BufferCreateInfo {
+                                usage: BufferUsage::UNIFORM_BUFFER,
+                                ..Default::default()
+                            },
+                            AllocationCreateInfo {
+                                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                                ..Default::default()
+                            },
+                            uniforms,
+                        )
+                        .unwrap();
+                        let ds = DescriptorSet::new(
+                            self.descriptor_set_allocator.clone(),
+                            self.shadow_pipeline.layout().set_layouts()[0].clone(),
+                            [WriteDescriptorSet::buffer(0, ubuf)],
+                            [],
+                        )
+                        .unwrap();
+                        builder
+                            .bind_descriptor_sets(
+                                PipelineBindPoint::Graphics,
+                                self.shadow_pipeline.layout().clone(),
+                                0,
+                                ds,
+                            )
+                            .unwrap()
+                            .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
+                            .unwrap()
+                            .bind_index_buffer(mesh.index_buffer.clone())
+                            .unwrap();
+                        unsafe {
+                            builder
+                                .draw_indexed(mesh.index_buffer.len() as u32, 1, 0, 0, 0)
+                                .unwrap();
+                        }
+                    }
+                }
+
+                builder.end_render_pass(SubpassEndInfo::default()).unwrap();
+            }
+        }
+
+        let spot_array_view = ImageView::new(
+            spot_image.clone(),
+            ImageViewCreateInfo {
+                view_type: ImageViewType::Dim2dArray,
+                subresource_range: ImageSubresourceRange {
+                    aspects: ImageAspects::DEPTH,
+                    mip_levels: 0..1,
+                    array_layers: 0..MAX_LIGHTS as u32,
+                },
+                ..ImageViewCreateInfo::from_image(spot_image)
+            },
+        )
+        .unwrap();
+
+        let point_array_view = ImageView::new(
+            point_image.clone(),
+            ImageViewCreateInfo {
+                view_type: ImageViewType::CubeArray,
+                subresource_range: ImageSubresourceRange {
+                    aspects: ImageAspects::DEPTH,
+                    mip_levels: 0..1,
+                    array_layers: 0..MAX_LIGHTS as u32 * 6,
+                },
+                ..ImageViewCreateInfo::from_image(point_image)
+            },
+        )
+        .unwrap();
+
+        shadow::ShadowMaps {
+            spot_array_view,
+            point_array_view,
+            shadow_block_buf: self.build_shadow_block(lights),
+        }
+    }
+
     fn render_with_pipeline(
         &self,
         vk_pipeline: &Arc<GraphicsPipeline>,
-        objects: &[Object],
+        uploaded: &[UploadedMesh<'_>],
         camera: &Camera,
         framebuffer: &Framebuffer,
         ambient: f32,
@@ -410,6 +797,8 @@ impl VulkanRenderer {
         )
         .unwrap();
 
+        let shadow_maps = self.render_shadow_pass(&mut builder, uploaded, lights);
+
         builder
             .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
                 upload_buffer,
@@ -448,16 +837,12 @@ impl VulkanRenderer {
 
         let light_block = self.build_light_block(lights);
         let empty_light_block = self.build_light_block(&[]);
-        let triangle_count: usize = objects.iter().map(|o| o.mesh.faces.len()).sum();
+        let triangle_count: usize = uploaded.iter().map(|u| u.object.mesh.faces.len()).sum();
 
-        for obj in objects {
-            if obj.mesh.faces.is_empty() {
-                continue;
-            }
-            let (vbuf, ibuf) = self.upload_object(obj);
-            let index_count = ibuf.len() as u32;
-            let uniform_buf = self.build_uniforms(obj, camera, ambient);
-            let active_lights = if obj.is_light {
+        for mesh in uploaded {
+            let index_count = mesh.index_buffer.len() as u32;
+            let uniform_buf = self.build_uniforms(mesh.object, camera, ambient);
+            let active_lights = if mesh.object.is_light {
                 &empty_light_block
             } else {
                 &light_block
@@ -469,6 +854,17 @@ impl VulkanRenderer {
                 [
                     WriteDescriptorSet::buffer(0, uniform_buf),
                     WriteDescriptorSet::buffer(1, active_lights.clone()),
+                    WriteDescriptorSet::buffer(2, shadow_maps.shadow_block_buf.clone()),
+                    WriteDescriptorSet::image_view_sampler(
+                        3,
+                        shadow_maps.spot_array_view.clone(),
+                        self.shadow_sampler.clone(),
+                    ),
+                    WriteDescriptorSet::image_view_sampler(
+                        4,
+                        shadow_maps.point_array_view.clone(),
+                        self.shadow_sampler.clone(),
+                    ),
                 ],
                 [],
             )
@@ -482,9 +878,9 @@ impl VulkanRenderer {
                     descriptor_set,
                 )
                 .unwrap()
-                .bind_vertex_buffers(0, vbuf)
+                .bind_vertex_buffers(0, mesh.vertex_buffer.clone())
                 .unwrap()
-                .bind_index_buffer(ibuf)
+                .bind_index_buffer(mesh.index_buffer.clone())
                 .unwrap();
 
             // Safety: indices are [0,1,2, 3,4,5, ...] generated in sync with verts, so every index < verts.len().
@@ -534,9 +930,10 @@ impl Renderer for VulkanRenderer {
         framebuffer: &Framebuffer,
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
+        let uploaded = self.upload_objects(objects);
         self.render_with_pipeline(
             &self.pipeline.get_graphics_pipeline(PipelineType::Normal),
-            objects,
+            &uploaded,
             camera,
             framebuffer,
             ambient,
@@ -550,9 +947,10 @@ impl Renderer for VulkanRenderer {
         camera: &Camera,
         framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)> {
+        let uploaded = self.upload_objects(objects);
         self.render_with_pipeline(
             &self.pipeline.get_graphics_pipeline(PipelineType::WireFrame),
-            objects,
+            &uploaded,
             camera,
             framebuffer,
             1.0,
