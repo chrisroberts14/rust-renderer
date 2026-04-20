@@ -3,6 +3,8 @@ pub mod vec2;
 pub mod vec3;
 pub mod vec4;
 
+pub use mat4::GpuMat4;
+
 use vec2::Vec2;
 use vec3::Vec3;
 use vec4::Vec4;

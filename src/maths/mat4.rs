@@ -227,6 +227,22 @@ impl Mat4 {
     }
 }
 
+/// A `Mat4` packed in column-major order for GPU upload (GLSL/WGSL `mat4x4`).
+/// Always construct via `From<Mat4>` — never build the columns by hand.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuMat4 {
+    pub(crate) cols: [[f32; 4]; 4],
+}
+
+impl From<Mat4> for GpuMat4 {
+    fn from(m: Mat4) -> Self {
+        Self {
+            cols: m.transpose().m,
+        }
+    }
+}
+
 impl Mul<Mat4> for Mat4 {
     type Output = Mat4;
 
@@ -411,5 +427,23 @@ mod tests {
             "ndc_x = {}",
             clip.x / clip.w
         );
+    }
+
+    #[test]
+    fn test_gpu_mat4_transposes_on_construction() {
+        use super::GpuMat4;
+        let m = Mat4 {
+            m: [
+                [1.0, 2.0, 3.0, 4.0],
+                [5.0, 6.0, 7.0, 8.0],
+                [9.0, 10.0, 11.0, 12.0],
+                [13.0, 14.0, 15.0, 16.0],
+            ],
+        };
+        let gpu: GpuMat4 = m.into();
+        assert_eq!(gpu.cols[0], [1.0, 5.0, 9.0, 13.0]);
+        assert_eq!(gpu.cols[1], [2.0, 6.0, 10.0, 14.0]);
+        assert_eq!(gpu.cols[2], [3.0, 7.0, 11.0, 15.0]);
+        assert_eq!(gpu.cols[3], [4.0, 8.0, 12.0, 16.0]);
     }
 }

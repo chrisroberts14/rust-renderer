@@ -18,6 +18,7 @@ use vulkano::pipeline::{
 };
 use vulkano::render_pass::{RenderPass, Subpass};
 
+use crate::maths::GpuMat4;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec3::Vec3;
 
@@ -27,7 +28,7 @@ pub(super) const SHADOW_FAR: f32 = 100.0;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(super) struct VkShadowBlock {
-    pub spot_light_space: [[[f32; 4]; 4]; 8],
+    pub spot_light_space: [GpuMat4; 8],
     pub point_far_plane: f32,
     pub _pad: [f32; 3],
 }
@@ -35,8 +36,8 @@ pub(super) struct VkShadowBlock {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(super) struct VkShadowUniforms {
-    pub light_vp: [[f32; 4]; 4],
-    pub model: [[f32; 4]; 4],
+    pub light_vp: GpuMat4,
+    pub model: GpuMat4,
     pub light_pos: [f32; 4],
     pub shadow_far: f32,
     pub _pad: [f32; 3],

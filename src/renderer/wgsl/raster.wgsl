@@ -35,9 +35,13 @@ struct ShadowBlock {
 @group(0) @binding(1) var<uniform> lights: LightBlock;
 @group(0) @binding(2) var tex: texture_2d<f32>;
 @group(0) @binding(3) var tex_sampler: sampler;
-@group(0) @binding(4) var shadow_maps: texture_depth_2d_array;
+@group(0) @binding(4) var spot_shadow_maps: texture_depth_2d_array;
 @group(0) @binding(5) var shadow_sampler: sampler_comparison;
 @group(0) @binding(6) var<uniform> shadow_u: ShadowBlock;
+@group(0) @binding(7) var point_shadow_maps: texture_depth_cube_array;
+
+const SHADOW_NEAR: f32 = 0.1;
+const SHADOW_FAR:  f32 = 100.0;
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -73,9 +77,9 @@ fn fs_wireframe(in: VertexOutput) -> @location(0) vec4<f32> {
 
 const SHININESS: f32 = 16.0;
 
-/// Returns 1.0 (lit) or 0.0 (shadow) for `world_pos` with respect to light `light_idx`.
+/// Returns 1.0 (lit) or 0.0 (shadow) for `world_pos` with respect to spot light `light_idx`.
 /// Points outside the light's frustum are treated as fully lit.
-fn sample_shadow(light_idx: u32, world_pos: vec3<f32>) -> f32 {
+fn sample_spot_shadow(light_idx: u32, world_pos: vec3<f32>) -> f32 {
     let light_clip = shadow_u.light_vp[light_idx] * vec4<f32>(world_pos, 1.0);
     if light_clip.w <= 0.0 {
         return 1.0;
@@ -91,7 +95,23 @@ fn sample_shadow(light_idx: u32, world_pos: vec3<f32>) -> f32 {
         return 1.0;
     }
     // textureSampleCompare with LessEqual: returns 1.0 if fragment_depth <= stored_depth (lit).
-    return textureSampleCompare(shadow_maps, shadow_sampler, shadow_uv, i32(light_idx), light_ndc.z);
+    return textureSampleCompare(spot_shadow_maps, shadow_sampler, shadow_uv, i32(light_idx), light_ndc.z);
+}
+
+/// Returns 1.0 (lit) or 0.0 (shadow) for `world_pos` with respect to point light `light_idx`.
+/// Uses a cube-array shadow map; depth is linearised to [0,1] using SHADOW_NEAR/SHADOW_FAR.
+fn sample_point_shadow(light_idx: u32, lpos: vec3<f32>, world_pos: vec3<f32>) -> f32 {
+    let dir = world_pos - lpos;
+    let dist = length(dir);
+    let ndc_z = SHADOW_FAR * (dist - SHADOW_NEAR) / (dist * (SHADOW_FAR - SHADOW_NEAR));
+    let bias = 0.005;
+    return textureSampleCompare(
+        point_shadow_maps,
+        shadow_sampler,
+        dir,
+        i32(light_idx),
+        ndc_z - bias,
+    );
 }
 
 @fragment
@@ -132,7 +152,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
           }
       }
 
-      let shadow = sample_shadow(i, in.world_pos);
+      var shadow: f32;
+      if cone_angle > 0.0 {
+          shadow = sample_spot_shadow(i, in.world_pos);
+      } else {
+          shadow = sample_point_shadow(i, lights.lights[i].position.xyz, in.world_pos);
+      }
       let lcol   = lights.lights[i].colour.rgb * (dist_atten * cone_atten * shadow);
       let ldir   = normalize(diff);
       let ndotl  = max(dot(in.normal, ldir), 0.0);

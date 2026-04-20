@@ -75,7 +75,7 @@ impl Pipeline {
             vertex_input_state.clone(),
             subpass.clone(),
             layout.clone(),
-            PipelineType::Normal,
+            PipelineType::WireFrame,
         )
         .expect("Failed to create wireframe pipeline");
         let normal_pipeline = Self::create_pipeline(
