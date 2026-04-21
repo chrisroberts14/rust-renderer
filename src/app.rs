@@ -70,9 +70,9 @@ impl App {
         height: u32,
     ) -> Box<dyn Display> {
         match renderer {
-            ActiveRenderer::Gpu(_) => {
+            ActiveRenderer::WGSL(_) => {
                 let wgsl = WgslDisplay::new(window, width as usize, height as usize);
-                *renderer = ActiveRenderer::Gpu(Box::new(WGSLRenderer::from_display(&wgsl)));
+                *renderer = ActiveRenderer::WGSL(Box::new(WGSLRenderer::from_display(&wgsl)));
                 Box::new(wgsl)
             }
             ActiveRenderer::Vulkan(_) => {

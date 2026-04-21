@@ -28,7 +28,7 @@ pub use cpu::shade::shade;
 pub enum RendererChoice {
     SingleThreadRaster,
     MultiThreadRaster,
-    Gpu,
+    WGSL,
     Vulkan,
 }
 
@@ -37,7 +37,7 @@ impl RendererChoice {
         match self {
             RendererChoice::SingleThreadRaster => cpu::single_thread_active(),
             RendererChoice::MultiThreadRaster => cpu::multi_thread_active(),
-            RendererChoice::Gpu => wgsl::into_active(),
+            RendererChoice::WGSL => wgsl::into_active(),
             RendererChoice::Vulkan => vulkan::into_active(),
         }
     }
@@ -51,7 +51,7 @@ impl RendererChoice {
 pub enum ActiveRenderer {
     SingleThreadRaster(Box<SingleThreadRasterRenderer>),
     MultiThreadRaster(Box<MultiThreadRasterRenderer>),
-    Gpu(Box<WGSLRenderer>),
+    WGSL(Box<WGSLRenderer>),
     Vulkan(Box<VulkanRenderer>),
 }
 
@@ -60,7 +60,7 @@ impl ActiveRenderer {
         match self {
             Self::SingleThreadRaster(_) => RendererChoice::SingleThreadRaster,
             Self::MultiThreadRaster(_) => RendererChoice::MultiThreadRaster,
-            Self::Gpu(_) => RendererChoice::Gpu,
+            Self::WGSL(_) => RendererChoice::WGSL,
             Self::Vulkan(_) => RendererChoice::Vulkan,
         }
     }
@@ -77,7 +77,7 @@ impl ActiveRenderer {
     /// Returns the GPU colour texture view from the most recent render, or `None` for CPU renderers.
     pub fn take_gpu_view(&self) -> Option<wgpu::TextureView> {
         match self {
-            Self::Gpu(r) => r.take_gpu_view(),
+            Self::WGSL(r) => r.take_gpu_view(),
             _ => None,
         }
     }
@@ -94,7 +94,7 @@ impl ActiveRenderer {
         match self {
             Self::SingleThreadRaster(r) => r.increase_tile_count(delta),
             Self::MultiThreadRaster(r) => r.increase_tile_count(delta),
-            Self::Gpu(_) | Self::Vulkan(_) => {}
+            Self::WGSL(_) | Self::Vulkan(_) => {}
         }
     }
 
@@ -103,7 +103,7 @@ impl ActiveRenderer {
         match self {
             Self::SingleThreadRaster(r) => r.decrease_tile_count(delta),
             Self::MultiThreadRaster(r) => r.decrease_tile_count(delta),
-            Self::Gpu(_) | Self::Vulkan(_) => {}
+            Self::WGSL(_) | Self::Vulkan(_) => {}
         }
     }
 }
@@ -124,7 +124,7 @@ impl Renderer for ActiveRenderer {
             Self::MultiThreadRaster(r) => {
                 r.render_objects(objects, camera, lights, framebuffer, ambient)
             }
-            Self::Gpu(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
+            Self::WGSL(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
             Self::Vulkan(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
         }
     }
@@ -138,7 +138,7 @@ impl Renderer for ActiveRenderer {
         match self {
             Self::SingleThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::MultiThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
-            Self::Gpu(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::WGSL(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::Vulkan(r) => r.render_wireframe(objects, camera, framebuffer),
         }
     }
@@ -149,7 +149,7 @@ impl fmt::Display for ActiveRenderer {
         match self {
             Self::SingleThreadRaster(_) => write!(f, "SingleThreadRaster"),
             Self::MultiThreadRaster(_) => write!(f, "MultiThreadRaster"),
-            Self::Gpu(_) => write!(f, "Gpu"),
+            Self::WGSL(_) => write!(f, "WGSL"),
             Self::Vulkan(_) => write!(f, "Vulkan"),
         }
     }

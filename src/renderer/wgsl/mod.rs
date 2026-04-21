@@ -1128,5 +1128,5 @@ impl super::Renderer for WGSLRenderer {
 }
 
 pub fn into_active() -> super::ActiveRenderer {
-    super::ActiveRenderer::Gpu(Box::default())
+    super::ActiveRenderer::WGSL(Box::default())
 }
