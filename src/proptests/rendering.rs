@@ -83,7 +83,7 @@ fn scene() -> impl Strategy<Value = Scene> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
+    use crate::renderer::cpu::{MultiThreadCPU, SingleThreadCPU};
     use crate::renderer::wgsl::WGSLRenderer;
     use std::sync::{LazyLock, Mutex};
 
@@ -95,13 +95,13 @@ mod tests {
     proptest! {
         #[test]
         fn single_thread_renders_without_panic(mut scene in scene()) {
-            let renderer = SingleThreadRasterRenderer::new(32);
+            let renderer = SingleThreadCPU::new(32);
             scene.render_scene(&renderer);
         }
 
         #[test]
         fn multi_thread_renders_without_panic(mut scene in scene()) {
-            let renderer = MultiThreadRasterRenderer::new(32);
+            let renderer = MultiThreadCPU::new(32);
             scene.render_scene(&renderer);
         }
 
@@ -114,8 +114,8 @@ mod tests {
         /// We don't check the GPU renderer here as it may legitimately disagree
         #[test]
         fn cpu_renderers_produce_identical_output(mut scene in scene()) {
-            let single = SingleThreadRasterRenderer::new(32).with_shadow_map_size(128);
-            let multi = MultiThreadRasterRenderer::new(32).with_shadow_map_size(128);
+            let single = SingleThreadCPU::new(32).with_shadow_map_size(128);
+            let multi = MultiThreadCPU::new(32).with_shadow_map_size(128);
 
             scene.render_scene(&single);
             let single_pixels = scene.framebuffer.as_bytes().to_vec();

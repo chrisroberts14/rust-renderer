@@ -3,7 +3,7 @@ use criterion::{
 };
 use rust_renderer::file::scene_file::SceneFile;
 use rust_renderer::maths::vec3::Vec3;
-use rust_renderer::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
+use rust_renderer::renderer::cpu::{MultiThreadCPU, SingleThreadCPU};
 use rust_renderer::renderer::shade;
 use rust_renderer::renderer::wgsl::WGSLRenderer;
 use rust_renderer::scenes::lights::Light;
@@ -27,7 +27,7 @@ fn add_single_thread_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, s
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            || SingleThreadRasterRenderer::new(32),
+            || SingleThreadCPU::new(32),
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );
@@ -35,7 +35,7 @@ fn add_single_thread_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, s
 
     group.bench_function(format!("{name}/wireframe"), |b| {
         b.iter_batched(
-            || SingleThreadRasterRenderer::new(32),
+            || SingleThreadCPU::new(32),
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );
@@ -47,7 +47,7 @@ fn add_multi_thread_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, sc
 
     group.bench_function(format!("{name}/solid"), |b| {
         b.iter_batched(
-            || MultiThreadRasterRenderer::new(32),
+            || MultiThreadCPU::new(32),
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );
@@ -55,7 +55,7 @@ fn add_multi_thread_benches(group: &mut BenchmarkGroup<WallTime>, name: &str, sc
 
     group.bench_function(format!("{name}/wireframe"), |b| {
         b.iter_batched(
-            || MultiThreadRasterRenderer::new(32),
+            || MultiThreadCPU::new(32),
             |r| scene.render_scene(&r),
             criterion::BatchSize::SmallInput,
         );

@@ -1,5 +1,5 @@
 use rust_renderer::file::scene_file::SceneFile;
-use rust_renderer::renderer::cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
+use rust_renderer::renderer::cpu::{MultiThreadCPU, SingleThreadCPU};
 use rust_renderer::renderer::vulkan::VulkanRenderer;
 use rust_renderer::renderer::wgsl::WGSLRenderer;
 use rust_renderer::scenes::scene::Scene;
@@ -44,11 +44,11 @@ fn main() {
     println!("{}", "─".repeat(52));
 
     run("single_thread", &mut load_scene(), |s| {
-        s.render_scene(&SingleThreadRasterRenderer::new(32));
+        s.render_scene(&SingleThreadCPU::new(32));
     });
 
     run("multi_thread", &mut load_scene(), |s| {
-        s.render_scene(&MultiThreadRasterRenderer::new(32));
+        s.render_scene(&MultiThreadCPU::new(32));
     });
 
     let gpu = WGSLRenderer::new();

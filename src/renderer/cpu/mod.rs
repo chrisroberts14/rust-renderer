@@ -16,12 +16,12 @@ use prepare::prepare_render;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-pub struct SingleThreadRasterRenderer {
+pub struct SingleThreadCPU {
     tile_size: usize,
     shadow_map_size: usize,
 }
 
-impl SingleThreadRasterRenderer {
+impl SingleThreadCPU {
     pub fn new(tile_size: usize) -> Self {
         Self {
             tile_size,
@@ -46,7 +46,7 @@ impl SingleThreadRasterRenderer {
     }
 }
 
-impl Renderer for SingleThreadRasterRenderer {
+impl Renderer for SingleThreadCPU {
     fn render_objects(
         &self,
         objects: &[Object],
@@ -98,12 +98,12 @@ impl Renderer for SingleThreadRasterRenderer {
     }
 }
 
-pub struct MultiThreadRasterRenderer {
+pub struct MultiThreadCPU {
     tile_size: usize,
     shadow_map_size: usize,
 }
 
-impl MultiThreadRasterRenderer {
+impl MultiThreadCPU {
     pub fn new(tile_size: usize) -> Self {
         Self {
             tile_size,
@@ -127,7 +127,7 @@ impl MultiThreadRasterRenderer {
     }
 }
 
-impl Renderer for MultiThreadRasterRenderer {
+impl Renderer for MultiThreadCPU {
     fn render_objects(
         &self,
         objects: &[Object],
@@ -180,9 +180,9 @@ impl Renderer for MultiThreadRasterRenderer {
 }
 
 pub fn single_thread_active() -> super::ActiveRenderer {
-    super::ActiveRenderer::SingleThreadRaster(Box::new(SingleThreadRasterRenderer::new(32)))
+    super::ActiveRenderer::SingleThreadCPU(Box::new(SingleThreadCPU::new(32)))
 }
 
 pub fn multi_thread_active() -> super::ActiveRenderer {
-    super::ActiveRenderer::MultiThreadRaster(Box::new(MultiThreadRasterRenderer::new(32)))
+    super::ActiveRenderer::MultiThreadCPU(Box::new(MultiThreadCPU::new(32)))
 }

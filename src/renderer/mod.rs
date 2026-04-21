@@ -13,21 +13,21 @@ use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use clap::ValueEnum;
-use cpu::{MultiThreadRasterRenderer, SingleThreadRasterRenderer};
 use enum_iter_macro::EnumIter;
 use std::fmt;
 use std::sync::Arc;
 use strum_macros::Display;
 use wgpu;
 
+use crate::renderer::cpu::{MultiThreadCPU, SingleThreadCPU};
 pub use cpu::shade::shade;
 
 /// CLI argument type for selecting an initial renderer.
 /// Once a renderer is implemented it will need to be "registered" here.
 #[derive(Clone, ValueEnum, Display, PartialEq, EnumIter)]
 pub enum RendererChoice {
-    SingleThreadRaster,
-    MultiThreadRaster,
+    SingleThreadCPU,
+    MultiThreadCPU,
     WGSL,
     Vulkan,
 }
@@ -35,8 +35,8 @@ pub enum RendererChoice {
 impl RendererChoice {
     pub fn into_active(self) -> ActiveRenderer {
         match self {
-            RendererChoice::SingleThreadRaster => cpu::single_thread_active(),
-            RendererChoice::MultiThreadRaster => cpu::multi_thread_active(),
+            RendererChoice::SingleThreadCPU => cpu::single_thread_active(),
+            RendererChoice::MultiThreadCPU => cpu::multi_thread_active(),
             RendererChoice::WGSL => wgsl::into_active(),
             RendererChoice::Vulkan => vulkan::into_active(),
         }
@@ -49,8 +49,8 @@ impl RendererChoice {
 /// operations (tile count, GPU view) directly — so callers never need to runtime-check the
 /// variant just to call a method.
 pub enum ActiveRenderer {
-    SingleThreadRaster(Box<SingleThreadRasterRenderer>),
-    MultiThreadRaster(Box<MultiThreadRasterRenderer>),
+    SingleThreadCPU(Box<SingleThreadCPU>),
+    MultiThreadCPU(Box<MultiThreadCPU>),
     WGSL(Box<WGSLRenderer>),
     Vulkan(Box<VulkanRenderer>),
 }
@@ -58,8 +58,8 @@ pub enum ActiveRenderer {
 impl ActiveRenderer {
     fn as_choice(&self) -> RendererChoice {
         match self {
-            Self::SingleThreadRaster(_) => RendererChoice::SingleThreadRaster,
-            Self::MultiThreadRaster(_) => RendererChoice::MultiThreadRaster,
+            Self::SingleThreadCPU(_) => RendererChoice::SingleThreadCPU,
+            Self::MultiThreadCPU(_) => RendererChoice::MultiThreadCPU,
             Self::WGSL(_) => RendererChoice::WGSL,
             Self::Vulkan(_) => RendererChoice::Vulkan,
         }
@@ -92,8 +92,8 @@ impl ActiveRenderer {
     /// Increases the tile count. No-op on the GPU renderer.
     pub fn increase_tile_count(&mut self, delta: usize) {
         match self {
-            Self::SingleThreadRaster(r) => r.increase_tile_count(delta),
-            Self::MultiThreadRaster(r) => r.increase_tile_count(delta),
+            Self::SingleThreadCPU(r) => r.increase_tile_count(delta),
+            Self::MultiThreadCPU(r) => r.increase_tile_count(delta),
             Self::WGSL(_) | Self::Vulkan(_) => {}
         }
     }
@@ -101,8 +101,8 @@ impl ActiveRenderer {
     /// Decreases the tile count. No-op on the GPU renderer.
     pub fn decrease_tile_count(&mut self, delta: usize) {
         match self {
-            Self::SingleThreadRaster(r) => r.decrease_tile_count(delta),
-            Self::MultiThreadRaster(r) => r.decrease_tile_count(delta),
+            Self::SingleThreadCPU(r) => r.decrease_tile_count(delta),
+            Self::MultiThreadCPU(r) => r.decrease_tile_count(delta),
             Self::WGSL(_) | Self::Vulkan(_) => {}
         }
     }
@@ -118,10 +118,10 @@ impl Renderer for ActiveRenderer {
         ambient: f32,
     ) -> Vec<(&'static str, String)> {
         match self {
-            Self::SingleThreadRaster(r) => {
+            Self::SingleThreadCPU(r) => {
                 r.render_objects(objects, camera, lights, framebuffer, ambient)
             }
-            Self::MultiThreadRaster(r) => {
+            Self::MultiThreadCPU(r) => {
                 r.render_objects(objects, camera, lights, framebuffer, ambient)
             }
             Self::WGSL(r) => r.render_objects(objects, camera, lights, framebuffer, ambient),
@@ -136,8 +136,8 @@ impl Renderer for ActiveRenderer {
         framebuffer: &Framebuffer,
     ) -> Vec<(&'static str, String)> {
         match self {
-            Self::SingleThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
-            Self::MultiThreadRaster(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::SingleThreadCPU(r) => r.render_wireframe(objects, camera, framebuffer),
+            Self::MultiThreadCPU(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::WGSL(r) => r.render_wireframe(objects, camera, framebuffer),
             Self::Vulkan(r) => r.render_wireframe(objects, camera, framebuffer),
         }
@@ -147,8 +147,8 @@ impl Renderer for ActiveRenderer {
 impl fmt::Display for ActiveRenderer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SingleThreadRaster(_) => write!(f, "SingleThreadRaster"),
-            Self::MultiThreadRaster(_) => write!(f, "MultiThreadRaster"),
+            Self::SingleThreadCPU(_) => write!(f, "SingleThreadCPU"),
+            Self::MultiThreadCPU(_) => write!(f, "MultiThreadCPU"),
             Self::WGSL(_) => write!(f, "WGSL"),
             Self::Vulkan(_) => write!(f, "Vulkan"),
         }
