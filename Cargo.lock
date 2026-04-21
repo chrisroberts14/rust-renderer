@@ -2723,7 +2723,6 @@ dependencies = [
  "criterion 0.8.2",
  "enum-iter-macro",
  "image",
- "indexmap",
  "notify",
  "pixels",
  "pollster",
