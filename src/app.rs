@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -10,16 +9,14 @@ use crate::display::Display;
 use crate::file::SceneFileWatcher;
 use crate::file::file_iter::FileIter;
 use crate::file::key_bindings_file::{Action, KeyBindings};
-use crate::framebuffer::Framebuffer;
 use crate::maths::vec3::Vec3;
-use crate::overlay::OverlayManager;
-use crate::overlay::stats_overlay::StatsOverlay;
 use crate::renderer::ActiveRenderer;
 use crate::renderer::cpu::display::CpuDisplay;
 use crate::renderer::vulkan::VulkanRenderer;
 use crate::renderer::vulkan::display::VulkanDisplay;
 use crate::renderer::wgsl::WGSLRenderer;
 use crate::renderer::wgsl::display::WgslDisplay;
+use crate::terminal::StatsDisplay;
 
 const KEYBINDINGS_PATH: &str = "assets/keybindings.json";
 const NORMAL_SPEED: f32 = 0.05;
@@ -31,7 +28,7 @@ pub struct App {
     fast_move: bool,
     scene_files: Option<FileIter>,
     renderer: ActiveRenderer,
-    overlays: OverlayManager,
+    stats_display: StatsDisplay,
     key_bindings: KeyBindings,
 }
 
@@ -43,9 +40,6 @@ impl App {
         height: f32,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let key_bindings = KeyBindings::from_file_or_default(KEYBINDINGS_PATH);
-
-        let stats_overlay =
-            StatsOverlay::with_defaults(vec![("renderer_type", &format!("{}", renderer))]);
 
         let (scene, scene_files) = if let Some(scene) = scene_option {
             (scene, None)
@@ -62,7 +56,7 @@ impl App {
             fast_move: false,
             scene_files,
             renderer,
-            overlays: OverlayManager::new(stats_overlay),
+            stats_display: StatsDisplay::new(),
             key_bindings,
         })
     }
@@ -158,9 +152,6 @@ impl App {
             Action::DecreaseTiles => {
                 self.renderer.decrease_tile_count(1);
             }
-            Action::ToggleOverlay => {
-                self.scene.scene().settings.toggle_overlay();
-            }
             Action::ReleaseMouse => {
                 self.display_mut().release_mouse()?;
             }
@@ -181,11 +172,6 @@ impl App {
                     width,
                     height,
                 ));
-
-                self.overlays.create_new_stats_overlay(vec![(
-                    "renderer_type",
-                    &format!("{}", self.renderer),
-                )]);
             }
             _ => {}
         }
@@ -222,7 +208,6 @@ fn named_key_to_str(key: &NamedKey) -> Option<&'static str> {
     match key {
         NamedKey::Shift => Some("shift"),
         NamedKey::Control => Some("ctrl"),
-        NamedKey::F1 => Some("f1"),
         NamedKey::Escape => Some("escape"),
         _ => None,
     }
@@ -277,48 +262,26 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                let stats = self.scene.scene().render_scene(&self.renderer);
+                let (stats, settings) = {
+                    let mut scene = self.scene.scene();
+                    let stats = scene.render_scene(&self.renderer);
+                    let settings = scene.settings.as_pairs();
+                    (stats, settings)
+                };
 
-                if self.scene.scene().settings.show_overlay {
-                    for (key, val) in &stats {
-                        self.overlays.add_stat(key, val);
-                    }
-                    for (key, val) in self.scene.scene().settings.as_pairs() {
-                        self.overlays.add_stat(&key, &val);
-                    }
-                }
+                let lines: Vec<String> = std::iter::once(format!("renderer: {}", self.renderer))
+                    .chain(stats.into_iter().map(|(k, v)| format!("{}: {}", k, v)))
+                    .chain(settings.into_iter().map(|(k, v)| format!("{}: {}", k, v)))
+                    .collect();
+
+                self.stats_display.update(lines);
 
                 if let Some(view) = self.renderer.take_gpu_view() {
-                    let show_overlay = self.scene.scene().settings.show_overlay;
-                    let overlay = show_overlay.then(|| {
-                        let (w, h) = {
-                            let scene = self.scene.scene();
-                            (scene.framebuffer.width, scene.framebuffer.height)
-                        };
-                        let mut fb = Framebuffer::new(w, h);
-                        self.overlays.write_to_framebuffer(&mut fb);
-                        fb
-                    });
-                    self.display_ref()
-                        .present_gpu_frame(&view, overlay.as_ref().map(|fb| fb.as_bytes()));
+                    self.display_ref().present_gpu_frame(&view, None);
                 } else if let Some(image) = self.renderer.take_vk_image() {
-                    let show_overlay = self.scene.scene().settings.show_overlay;
-                    let overlay = show_overlay.then(|| {
-                        let (w, h) = {
-                            let scene = self.scene.scene();
-                            (scene.framebuffer.width, scene.framebuffer.height)
-                        };
-                        let mut fb = Framebuffer::new(w, h);
-                        self.overlays.write_to_framebuffer(&mut fb);
-                        fb
-                    });
-                    self.display_ref()
-                        .present_vk_frame(&image, overlay.as_ref().map(|fb| fb.as_bytes()));
+                    self.display_ref().present_vk_frame(&image, None);
                 } else {
-                    let mut scene = self.scene.scene();
-                    if scene.settings.show_overlay {
-                        self.overlays.write_to_framebuffer(&mut scene.framebuffer);
-                    }
+                    let scene = self.scene.scene();
                     self.display_ref()
                         .present_cpu_frame(scene.framebuffer.as_bytes());
                 }

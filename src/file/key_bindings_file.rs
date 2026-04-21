@@ -16,7 +16,6 @@ pub enum Action {
     NextScene,
     IncreaseTiles,
     DecreaseTiles,
-    ToggleOverlay,
     ReleaseMouse,
     NextRenderer,
 }
@@ -35,7 +34,6 @@ fn action_from_str(s: &str) -> Option<Action> {
         "next_scene" => Some(Action::NextScene),
         "increase_tiles" => Some(Action::IncreaseTiles),
         "decrease_tiles" => Some(Action::DecreaseTiles),
-        "toggle_overlay" => Some(Action::ToggleOverlay),
         "release_mouse" => Some(Action::ReleaseMouse),
         "next_renderer" => Some(Action::NextRenderer),
         _ => None,
@@ -58,7 +56,6 @@ const DEFAULTS: &[(&str, &str)] = &[
     ("next_scene", "n"),
     ("increase_tiles", "t"),
     ("decrease_tiles", "y"),
-    ("toggle_overlay", "f1"),
     ("release_mouse", "escape"),
     ("next_renderer", "r"),
 ];

@@ -6,9 +6,9 @@ pub mod framebuffer;
 pub mod geometry;
 pub mod macros;
 pub mod maths;
-mod overlay;
 pub mod renderer;
 pub mod scenes;
+mod terminal;
 
 #[cfg(test)]
 mod proptests;

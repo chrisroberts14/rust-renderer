@@ -11,6 +11,5 @@
     "next_scene": "n",
     "increase_tiles": "t",
     "decrease_tiles": "y",
-    "toggle_overlay": "f1",
     "release_mouse": "escape"
 }

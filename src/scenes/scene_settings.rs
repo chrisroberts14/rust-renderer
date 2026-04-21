@@ -3,7 +3,6 @@
 pub struct SceneSettings {
     pub(crate) render_lights: bool,
     pub(crate) wire_frame_mode: bool,
-    pub(crate) show_overlay: bool,
 }
 
 impl SceneSettings {
@@ -15,11 +14,6 @@ impl SceneSettings {
     /// Toggle showing wireframe models
     pub fn toggle_wire_frame_mode(&mut self) {
         self.wire_frame_mode = !self.wire_frame_mode;
-    }
-
-    /// Toggle showing the debug overlay
-    pub(crate) fn toggle_overlay(&mut self) {
-        self.show_overlay = !self.show_overlay;
     }
 
     /// Return scene settings as string pairs
@@ -54,15 +48,6 @@ mod tests {
         assert!(settings.wire_frame_mode);
         settings.toggle_wire_frame_mode();
         assert!(!settings.wire_frame_mode);
-    }
-
-    #[test]
-    fn test_toggle_overlay() {
-        let mut settings = SceneSettings::default();
-        settings.toggle_overlay();
-        assert!(settings.show_overlay);
-        settings.toggle_overlay();
-        assert!(!settings.show_overlay);
     }
 
     #[test]
