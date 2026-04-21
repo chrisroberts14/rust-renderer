@@ -14,7 +14,6 @@ pub struct WgslDisplay {
     blit_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     cpu_texture: wgpu::Texture,
-    null_overlay: wgpu::Texture,
     sampler: wgpu::Sampler,
 }
 
@@ -84,9 +83,8 @@ impl WgslDisplay {
             label: Some("blit_bind_group_layout"),
             entries: &[
                 tex_entry(0),
-                tex_entry(1),
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
@@ -132,27 +130,6 @@ impl WgslDisplay {
             cache: None,
         });
 
-        let null_overlay = Self::create_rgba8_texture(&device, "null_overlay", 1, 1);
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &null_overlay,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &[0u8; 4],
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4),
-                rows_per_image: Some(1),
-            },
-            wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-        );
-
         Self {
             window,
             cursor: CursorState::new(),
@@ -168,7 +145,6 @@ impl WgslDisplay {
                 ..Default::default()
             }),
             blit_pipeline,
-            null_overlay,
             instance,
             surface,
             device: Arc::new(device),
@@ -179,21 +155,13 @@ impl WgslDisplay {
         }
     }
 
-    fn present_gpu_frame_inner(&self, gpu_view: &wgpu::TextureView, overlay_bytes: Option<&[u8]>) {
+    fn present_gpu_frame_inner(&self, gpu_view: &wgpu::TextureView) {
         let surface_texture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t)
             | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
             _ => return,
         };
         let surface_view = surface_texture.texture.create_view(&Default::default());
-
-        let overlay_view = match overlay_bytes {
-            Some(overlay) => {
-                self.upload_to_cpu_texture(overlay);
-                self.cpu_texture.create_view(&Default::default())
-            }
-            None => self.null_overlay.create_view(&Default::default()),
-        };
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -205,10 +173,6 @@ impl WgslDisplay {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&overlay_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
             ],
@@ -293,11 +257,11 @@ impl Display for WgslDisplay {
     fn present_cpu_frame(&self, pixels: &[u8]) {
         self.upload_to_cpu_texture(pixels);
         let view = self.cpu_texture.create_view(&Default::default());
-        self.present_gpu_frame_inner(&view, None);
+        self.present_gpu_frame_inner(&view);
     }
 
-    fn present_gpu_frame(&self, gpu_view: &wgpu::TextureView, overlay_bytes: Option<&[u8]>) {
-        self.present_gpu_frame_inner(gpu_view, overlay_bytes);
+    fn present_gpu_frame(&self, gpu_view: &wgpu::TextureView) {
+        self.present_gpu_frame_inner(gpu_view);
     }
 
     fn resize(&mut self, width: u32, height: u32) {

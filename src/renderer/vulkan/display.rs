@@ -1,6 +1,5 @@
 use crate::display::{CursorState, Display};
 use crate::renderer::vulkan::device::get_device_for_surface;
-use crate::renderer::vulkan::overlay::VulkanOverlay;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use vulkano::VulkanLibrary;
@@ -44,7 +43,6 @@ pub struct VulkanDisplay {
     memory_allocator: Arc<StandardMemoryAllocator>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     image_format: Format,
-    overlay: VulkanOverlay,
     frame_futures: RefCell<Vec<Option<Box<dyn FrameFence>>>>,
     current_frame: Cell<usize>,
 }
@@ -79,15 +77,6 @@ impl VulkanDisplay {
         let (swapchain, images, image_format) =
             Self::create_swapchain(&device, &surface, [width, height]);
 
-        let overlay = VulkanOverlay::new(
-            width,
-            height,
-            memory_allocator.clone(),
-            device.clone(),
-            image_format,
-            FRAMES_IN_FLIGHT,
-        );
-
         Self {
             window,
             device,
@@ -98,7 +87,6 @@ impl VulkanDisplay {
             memory_allocator,
             command_buffer_allocator,
             image_format,
-            overlay,
             frame_futures: RefCell::new((0..FRAMES_IN_FLIGHT).map(|_| None).collect()),
             current_frame: Cell::new(0),
         }
@@ -263,35 +251,16 @@ impl Display for VulkanDisplay {
         self.end_frame(acquire_future, builder.build().unwrap(), image_index);
     }
 
-    fn present_vk_frame(&self, image: &Arc<Image>, overlay: Option<&[u8]>) {
-        let [width, height] = self.swapchain.image_extent();
-
+    fn present_vk_frame(&self, image: &Arc<Image>) {
         self.begin_frame();
-        let frame_idx = self.current_frame.get() % FRAMES_IN_FLIGHT;
         let (image_index, _suboptimal, acquire_future) =
             acquire_next_image(self.swapchain.clone(), None).unwrap();
         let target_image = self.images[image_index as usize].clone();
 
         let mut builder = self.begin_command_buffer();
-
-        if let Some(overlay_bytes) = overlay {
-            let staging = self.create_rgba_staging_buffer(width, height, overlay_bytes);
-            builder
-                .copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(
-                    staging,
-                    self.overlay.overlay_image(frame_idx),
-                ))
-                .unwrap();
-        }
-
         builder
-            .blit_image(BlitImageInfo::images(image.clone(), target_image.clone()))
+            .blit_image(BlitImageInfo::images(image.clone(), target_image))
             .unwrap();
-
-        if overlay.is_some() {
-            self.overlay
-                .record_overlay_pass(&mut builder, target_image, width, height, frame_idx);
-        }
 
         self.end_frame(acquire_future, builder.build().unwrap(), image_index);
     }
@@ -311,14 +280,6 @@ impl Display for VulkanDisplay {
             .unwrap();
         self.swapchain = new_swapchain;
         self.images = new_images;
-        self.overlay = VulkanOverlay::new(
-            width,
-            height,
-            self.memory_allocator.clone(),
-            self.device.clone(),
-            self.image_format,
-            FRAMES_IN_FLIGHT,
-        );
     }
 
     fn capture_mouse(&mut self) -> Result<(), Box<dyn std::error::Error>> {

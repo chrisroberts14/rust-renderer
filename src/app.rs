@@ -277,9 +277,9 @@ impl ApplicationHandler for App {
                 self.stats_display.update(lines);
 
                 if let Some(view) = self.renderer.take_gpu_view() {
-                    self.display_ref().present_gpu_frame(&view, None);
+                    self.display_ref().present_gpu_frame(&view);
                 } else if let Some(image) = self.renderer.take_vk_image() {
-                    self.display_ref().present_vk_frame(&image, None);
+                    self.display_ref().present_vk_frame(&image);
                 } else {
                     let scene = self.scene.scene();
                     self.display_ref()
