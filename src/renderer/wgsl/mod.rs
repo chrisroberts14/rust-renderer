@@ -11,10 +11,10 @@ use crate::scenes::camera::Camera;
 use crate::scenes::lights::Light;
 use crate::scenes::material::Material;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-/// There needs to be a maximum number of lights as we need fixed size arrays
 const MAX_LIGHTS: usize = 8;
 const SHADOW_MAP_GPU_SIZE: u32 = 512;
 
@@ -30,22 +30,22 @@ pub struct GpuVertex {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuUniforms {
-    model: [[f32; 4]; 4],      // 64 bytes
-    view: [[f32; 4]; 4],       // 64 bytes
-    proj: [[f32; 4]; 4],       // 64 bytes
-    normal_mat: [[f32; 4]; 4], // 64 bytes
-    cam_pos: [f32; 4],         // 16 bytes
-    ambient: f32,              //  4 bytes
-    _pad: [f32; 3],            // 12 bytes — pads struct to 288, matching WGSL alignment
+    model: [[f32; 4]; 4],
+    view: [[f32; 4]; 4],
+    proj: [[f32; 4]; 4],
+    normal_mat: [[f32; 4]; 4],
+    cam_pos: [f32; 4],
+    ambient: f32,
+    _pad: [f32; 3],
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuLight {
-    position: [f32; 4],  // xyz = world pos, w = intensity
-    color: [f32; 4],     // xyz = rgb, w = unused
-    direction: [f32; 4], // xyz = spot direction, w = cone_angle (0 = point light)
-    falloff: [f32; 4],   // x = falloff_angle, yzw = padding
+    position: [f32; 4],
+    color: [f32; 4],
+    direction: [f32; 4],
+    falloff: [f32; 4],
 }
 
 #[repr(C)]
@@ -56,7 +56,6 @@ struct GpuLightBlock {
     _pad: [u32; 3],
 }
 
-/// Per-draw-call uniforms for the depth-only shadow pass.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuShadowPassUniforms {
@@ -64,7 +63,6 @@ struct GpuShadowPassUniforms {
     model: [[f32; 4]; 4],
 }
 
-/// One view-projection matrix per light, sent to the main shader for shadow lookups.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuShadowBlock {
@@ -77,6 +75,44 @@ struct ShadowBindings<'a> {
     block_buf: &'a wgpu::Buffer,
 }
 
+// ── per-frame geometry upload ──────────────────────────────────────────────
+
+/// Geometry buffers for one object, valid for a single frame.
+/// Also carries the pre-transposed model matrix needed by the shadow pass.
+struct UploadedGeom {
+    vbuf: wgpu::Buffer,
+    ibuf: wgpu::Buffer,
+    index_count: u32,
+    is_light: bool,
+    model: [[f32; 4]; 4],
+}
+
+// ── material texture cache ─────────────────────────────────────────────────
+
+/// Stable key for a material's GPU texture entry.
+/// Color materials are keyed by their RGBA bytes.
+/// Texture materials are keyed by the Arc pointer, which is stable for the Arc's lifetime.
+#[derive(Hash, Eq, PartialEq)]
+enum MaterialKey {
+    Color([u8; 4]),
+    Texture(usize),
+}
+
+fn material_key(mat: &Material) -> MaterialKey {
+    match mat {
+        Material::Color(c) => MaterialKey::Color(*c),
+        Material::Texture(arc) => MaterialKey::Texture(Arc::as_ptr(arc) as usize),
+    }
+}
+
+/// GPU texture + view owned for the lifetime of the cache entry.
+struct CachedMaterial {
+    _texture: wgpu::Texture,
+    view: wgpu::TextureView,
+}
+
+// ── main renderer ──────────────────────────────────────────────────────────
+
 pub struct WGSLRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
@@ -85,9 +121,16 @@ pub struct WGSLRenderer {
     shadow_pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     shadow_bind_group_layout: wgpu::BindGroupLayout,
-    // RefCell needed because render_objects takes &self but we lazily initialise/resize this
     colour_texture: RefCell<Option<GpuFramebuffer>>,
     last_colour_view: RefCell<Option<wgpu::TextureView>>,
+    /// Depth texture array (MAX_LIGHTS layers) allocated once, reused every frame.
+    shadow_texture: wgpu::Texture,
+    /// Comparison sampler for PCF shadow lookups — created once.
+    shadow_sampler: wgpu::Sampler,
+    /// Linear/Repeat sampler shared by all material textures — created once.
+    material_sampler: wgpu::Sampler,
+    /// Per-material GPU texture cache, keyed by colour bytes or Arc pointer.
+    mat_cache: RefCell<HashMap<MaterialKey, Arc<CachedMaterial>>>,
 }
 
 struct GpuFramebuffer {
@@ -99,14 +142,9 @@ struct GpuFramebuffer {
 }
 
 fn mat_to_gpu(m: Mat4) -> [[f32; 4]; 4] {
-    // Mat4 is row-major; WGSL mat4x4 is column-major — transpose before upload.
     m.transpose().m
 }
 
-/// wgpu (Vulkan convention) expects NDC depth in [0, 1] with 0 at the near plane.
-/// Camera::projection_matrix() uses OpenGL convention (near→−1, far→+1), which causes
-/// the near half of the frustum to have z_clip < 0 and be hardware-clipped by wgpu.
-/// This matrix maps near→0, far→1 instead.
 fn gpu_perspective(fov: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     let f = 1.0 / (fov * 0.5).tan();
     let nf = 1.0 / (near - far);
@@ -137,12 +175,10 @@ impl Default for WGSLRenderer {
 }
 
 impl WGSLRenderer {
-    /// Creates the renderer, blocking the calling thread until the wgpu device is ready.
     pub fn new() -> Self {
         pollster::block_on(Self::init_async())
     }
 
-    /// Requests a high-performance adapter and device, then compiles all render pipelines.
     async fn init_async() -> Self {
         let instance = wgpu::Instance::default();
         let adapter = instance
@@ -164,37 +200,35 @@ impl WGSLRenderer {
 
         let device = Arc::new(device);
         let queue = Arc::new(queue);
-
-        let bind_group_layout = Self::create_bind_group_layout(&device);
-        let shadow_bind_group_layout = Self::create_shadow_bind_group_layout(&device);
-        let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
-        let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
-        let shadow_pipeline = Self::create_shadow_pipeline(&device, &shadow_bind_group_layout);
-
-        Self {
-            device,
-            queue,
-            pipeline,
-            wireframe_pipeline,
-            shadow_pipeline,
-            bind_group_layout,
-            shadow_bind_group_layout,
-            colour_texture: RefCell::new(None),
-            last_colour_view: RefCell::new(None),
-        }
+        Self::from_device_queue(device, queue)
     }
 
-    /// Creates a renderer that shares the wgpu device and queue with the given display surface.
-    /// This allows the GPU renderer to blit its output directly to the surface without a CPU readback.
     pub fn from_display(display: &WgslDisplay) -> Self {
-        let device = display.shared_device();
-        let queue = display.shared_queue();
+        Self::from_device_queue(display.shared_device(), display.shared_queue())
+    }
 
+    fn from_device_queue(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
         let bind_group_layout = Self::create_bind_group_layout(&device);
         let shadow_bind_group_layout = Self::create_shadow_bind_group_layout(&device);
         let pipeline = Self::create_pipeline(&device, &bind_group_layout, false);
         let wireframe_pipeline = Self::create_pipeline(&device, &bind_group_layout, true);
         let shadow_pipeline = Self::create_shadow_pipeline(&device, &shadow_bind_group_layout);
+
+        let shadow_texture = Self::alloc_shadow_texture(&device);
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow_comparison_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+        let material_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
 
         Self {
             device,
@@ -206,6 +240,10 @@ impl WGSLRenderer {
             shadow_bind_group_layout,
             colour_texture: RefCell::new(None),
             last_colour_view: RefCell::new(None),
+            shadow_texture,
+            shadow_sampler,
+            material_sampler,
+            mat_cache: RefCell::new(HashMap::new()),
         }
     }
 
@@ -267,12 +305,10 @@ impl WGSLRenderer {
         }
     }
 
-    /// Creates the shared bind group layout used by both main render pipelines.
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
-                // @binding(0) — per-object transform + camera uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -283,7 +319,6 @@ impl WGSLRenderer {
                     },
                     count: None,
                 },
-                // @binding(1) — scene lights
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -294,7 +329,6 @@ impl WGSLRenderer {
                     },
                     count: None,
                 },
-                // @binding(2) — material texture
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -305,14 +339,12 @@ impl WGSLRenderer {
                     },
                     count: None,
                 },
-                // @binding(3) — material sampler
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
-                // @binding(4) — shadow map depth array (one layer per light)
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -323,14 +355,12 @@ impl WGSLRenderer {
                     },
                     count: None,
                 },
-                // @binding(5) — comparison sampler for PCF shadow lookups
                 wgpu::BindGroupLayoutEntry {
                     binding: 5,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
-                // @binding(6) — light view-projection matrices for shadow sampling
                 wgpu::BindGroupLayoutEntry {
                     binding: 6,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -345,7 +375,6 @@ impl WGSLRenderer {
         })
     }
 
-    /// Bind group layout for the depth-only shadow pass: a single uniform with light VP + model.
     fn create_shadow_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shadow_bgl"),
@@ -362,8 +391,6 @@ impl WGSLRenderer {
         })
     }
 
-    /// Builds a render pipeline. When `wireframe` is true, uses `fs_wireframe` and
-    /// `PolygonMode::Line`; otherwise uses `fs_main` with back-face culling.
     fn create_pipeline(
         device: &wgpu::Device,
         bind_group_layout: &wgpu::BindGroupLayout,
@@ -393,10 +420,10 @@ impl WGSLRenderer {
                     array_stride: size_of::<GpuVertex>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x3, // position
-                        1 => Float32x3, // normal
-                        2 => Float32x2, // uv
-                        3 => Float32x4, // color
+                        0 => Float32x3,
+                        1 => Float32x3,
+                        2 => Float32x2,
+                        3 => Float32x4,
                     ],
                 }],
                 compilation_options: Default::default(),
@@ -435,7 +462,6 @@ impl WGSLRenderer {
         })
     }
 
-    /// Builds the depth-only pipeline used for shadow map rendering.
     fn create_shadow_pipeline(
         device: &wgpu::Device,
         shadow_bind_group_layout: &wgpu::BindGroupLayout,
@@ -455,7 +481,6 @@ impl WGSLRenderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_shadow"),
-                // Reuse GpuVertex buffers; only position (@location 0) is read.
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: size_of::<GpuVertex>() as u64,
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -463,7 +488,7 @@ impl WGSLRenderer {
                 }],
                 compilation_options: Default::default(),
             },
-            fragment: None, // depth-only — no colour output
+            fragment: None,
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Cw,
@@ -475,7 +500,6 @@ impl WGSLRenderer {
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
-                // Slope-scale bias prevents self-shadowing (shadow acne) without PCF.
                 bias: wgpu::DepthBiasState {
                     constant: 2,
                     slope_scale: 2.0,
@@ -488,63 +512,94 @@ impl WGSLRenderer {
         })
     }
 
-    /// Converts an [`Object`]'s mesh into interleaved [`GpuVertex`] data and uploads it to a
-    /// vertex buffer and index buffer. Returns both buffers and the index count.
-    fn upload_object(device: &wgpu::Device, obj: &Object) -> (wgpu::Buffer, wgpu::Buffer, u32) {
-        let mut verts: Vec<GpuVertex> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
-
-        for (face_idx, &(i0, i1, i2)) in obj.mesh.faces.iter().enumerate() {
-            let (uv_i0, uv_i1, uv_i2) = obj
-                .mesh
-                .uv_faces
-                .get(face_idx)
-                .copied()
-                .unwrap_or((0, 0, 0));
-            let base = verts.len() as u32;
-            for (vi, uvi) in [(i0, uv_i0), (i1, uv_i1), (i2, uv_i2)] {
-                let pos = obj.mesh.vertices[vi];
-                let nor = obj.mesh.normals[vi];
-                let uv = obj
-                    .mesh
-                    .uvs
-                    .get(uvi)
-                    .copied()
-                    .unwrap_or(Vec2::new(0.0, 0.0));
-                let color = match &obj.material {
-                    Material::Color([r, g, b, a]) => [
-                        *r as f32 / 255.0,
-                        *g as f32 / 255.0,
-                        *b as f32 / 255.0,
-                        *a as f32 / 255.0,
-                    ],
-                    Material::Texture(_) => [1.0, 1.0, 1.0, 1.0],
-                };
-                verts.push(GpuVertex {
-                    position: [pos.x, pos.y, pos.z],
-                    normal: [nor.x, nor.y, nor.z],
-                    uv: [uv.x, uv.y],
-                    color,
-                });
-            }
-            indices.extend_from_slice(&[base, base + 1, base + 2]);
-        }
-
-        let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex_buf"),
-            contents: bytemuck::cast_slice(&verts),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let ibuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("index_buf"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        (vbuf, ibuf, indices.len() as u32)
+    /// Allocates the shadow map depth array (MAX_LIGHTS layers) used every frame.
+    /// Called once at construction; the texture is reused across frames.
+    fn alloc_shadow_texture(device: &wgpu::Device) -> wgpu::Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("shadow_map_array"),
+            size: wgpu::Extent3d {
+                width: SHADOW_MAP_GPU_SIZE,
+                height: SHADOW_MAP_GPU_SIZE,
+                depth_or_array_layers: MAX_LIGHTS as u32,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        })
     }
 
-    /// Packs per-object transform matrices, camera data, and ambient intensity into a uniform
-    /// buffer. Matrices are transposed from row-major (Rust) to column-major (WGSL).
+    /// Uploads all scene objects to GPU vertex/index buffers in one pass.
+    /// The resulting `UploadedGeom` slice is shared between the shadow pass and main pass,
+    /// avoiding the N_lights × N_objects redundant uploads in the previous design.
+    fn upload_geoms(device: &wgpu::Device, objects: &[Object]) -> Vec<UploadedGeom> {
+        objects
+            .iter()
+            .map(|obj| {
+                let mut verts: Vec<GpuVertex> = Vec::new();
+                let mut indices: Vec<u32> = Vec::new();
+
+                for (face_idx, &(i0, i1, i2)) in obj.mesh.faces.iter().enumerate() {
+                    let (uv_i0, uv_i1, uv_i2) = obj
+                        .mesh
+                        .uv_faces
+                        .get(face_idx)
+                        .copied()
+                        .unwrap_or((0, 0, 0));
+                    let base = verts.len() as u32;
+                    for (vi, uvi) in [(i0, uv_i0), (i1, uv_i1), (i2, uv_i2)] {
+                        let pos = obj.mesh.vertices[vi];
+                        let nor = obj.mesh.normals[vi];
+                        let uv = obj
+                            .mesh
+                            .uvs
+                            .get(uvi)
+                            .copied()
+                            .unwrap_or(Vec2::new(0.0, 0.0));
+                        let color = match &obj.material {
+                            Material::Color([r, g, b, a]) => [
+                                *r as f32 / 255.0,
+                                *g as f32 / 255.0,
+                                *b as f32 / 255.0,
+                                *a as f32 / 255.0,
+                            ],
+                            Material::Texture(_) => [1.0, 1.0, 1.0, 1.0],
+                        };
+                        verts.push(GpuVertex {
+                            position: [pos.x, pos.y, pos.z],
+                            normal: [nor.x, nor.y, nor.z],
+                            uv: [uv.x, uv.y],
+                            color,
+                        });
+                    }
+                    indices.extend_from_slice(&[base, base + 1, base + 2]);
+                }
+
+                let vbuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("vertex_buf"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ibuf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("index_buf"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+
+                let (model_mat, _) = obj.transform.matrices();
+                UploadedGeom {
+                    vbuf,
+                    ibuf,
+                    index_count: indices.len() as u32,
+                    is_light: obj.is_light,
+                    model: mat_to_gpu(model_mat),
+                }
+            })
+            .collect()
+    }
+
     fn build_uniforms(
         device: &wgpu::Device,
         obj: &Object,
@@ -568,8 +623,6 @@ impl WGSLRenderer {
         })
     }
 
-    /// Packs all scene lights into a `GpuLightBlock` uniform buffer (up to `MAX_LIGHTS`).
-    /// Point lights have `direction.w == 0`; spot lights carry their cone and falloff angles.
     fn build_light_block(device: &wgpu::Device, lights: &[Arc<dyn Light>]) -> wgpu::Buffer {
         let mut block = GpuLightBlock {
             lights: [GpuLight {
@@ -603,13 +656,15 @@ impl WGSLRenderer {
         })
     }
 
-    /// Uploads the object's material as a new GPU texture every call. For `Material::Color` a 1×1
-    /// texture is created; for `Material::Texture` the full image is rasterised row-by-row and uploaded.
-    fn upload_material_texture(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        material: &Material,
-    ) -> (wgpu::Texture, wgpu::TextureView, wgpu::Sampler) {
+    /// Ensures a GPU texture exists in `mat_cache` for this material.
+    /// Color materials produce a 1×1 texture; image textures are uploaded in full.
+    /// Subsequent calls for the same material key are no-ops.
+    fn ensure_cached(&self, material: &Material) {
+        let key = material_key(material);
+        if self.mat_cache.borrow().contains_key(&key) {
+            return;
+        }
+
         let (width, height, rgba): (u32, u32, Vec<u8>) = match material {
             Material::Color([r, g, b, a]) => (1, 1, vec![*r, *g, *b, *a]),
             Material::Texture(tex) => (tex.width, tex.height, {
@@ -630,7 +685,7 @@ impl WGSLRenderer {
             height,
             depth_or_array_layers: 1,
         };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("material_tex"),
             size,
             mip_level_count: 1,
@@ -640,7 +695,7 @@ impl WGSLRenderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        queue.write_texture(
+        self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
@@ -656,23 +711,20 @@ impl WGSLRenderer {
             size,
         );
         let view = texture.create_view(&Default::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
-        (texture, view, sampler)
+        self.mat_cache.borrow_mut().insert(
+            key,
+            Arc::new(CachedMaterial {
+                _texture: texture,
+                view,
+            }),
+        );
     }
 
-    /// Creates the bind group for a single draw call, wiring all seven bindings to their shader slots.
     fn build_bind_group(
         &self,
         uniform_buf: &wgpu::Buffer,
         light_buf: &wgpu::Buffer,
         tex_view: &wgpu::TextureView,
-        tex_sampler: &wgpu::Sampler,
         shadow: &ShadowBindings<'_>,
     ) -> wgpu::BindGroup {
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -693,7 +745,7 @@ impl WGSLRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Sampler(tex_sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.material_sampler),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
@@ -711,36 +763,16 @@ impl WGSLRenderer {
         })
     }
 
-    /// Creates a `Depth32Float` 2D-array texture with `MAX_LIGHTS` layers used for shadow maps.
-    /// Pass `size = 1` to produce a cheap dummy texture for wireframe / no-light rendering.
-    fn create_shadow_texture(&self, size: u32) -> wgpu::Texture {
-        self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("shadow_map_array"),
-            size: wgpu::Extent3d {
-                width: size,
-                height: size,
-                depth_or_array_layers: MAX_LIGHTS as u32,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        })
-    }
-
-    /// Encodes one depth-only render pass per light into `encoder`, writing results into the
-    /// corresponding layer of a `MAX_LIGHTS`-layer shadow texture array.
-    /// Returns the shadow texture and the `GpuShadowBlock` of light VP matrices for the shader.
+    /// Encodes one depth-only render pass per light into `encoder`.
+    /// Uses the pre-allocated `self.shadow_texture` and the already-uploaded `geoms`
+    /// slice — no additional geometry uploads occur here.
     fn build_shadow_maps(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         lights: &[Arc<dyn Light>],
-        objects: &[Object],
+        geoms: &[UploadedGeom],
         camera: &Camera,
-    ) -> (wgpu::Texture, GpuShadowBlock) {
-        let shadow_texture = self.create_shadow_texture(SHADOW_MAP_GPU_SIZE);
+    ) -> GpuShadowBlock {
         let mut shadow_block = GpuShadowBlock {
             light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
         };
@@ -749,14 +781,15 @@ impl WGSLRenderer {
             let lv_proj = light_gpu_view_proj(light.as_ref(), camera.near, camera.far);
             shadow_block.light_vp[light_idx] = mat_to_gpu(lv_proj);
 
-            // View into this light's layer of the shadow texture array.
-            let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                label: Some("shadow_layer_view"),
-                dimension: Some(wgpu::TextureViewDimension::D2),
-                base_array_layer: light_idx as u32,
-                array_layer_count: Some(1),
-                ..Default::default()
-            });
+            let layer_view = self
+                .shadow_texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("shadow_layer_view"),
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    base_array_layer: light_idx as u32,
+                    array_layer_count: Some(1),
+                    ..Default::default()
+                });
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("shadow_pass"),
@@ -774,15 +807,13 @@ impl WGSLRenderer {
 
             pass.set_pipeline(&self.shadow_pipeline);
 
-            for obj in objects {
-                if obj.is_light {
+            for geom in geoms {
+                if geom.is_light {
                     continue;
                 }
-                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
-                let (model, _) = obj.transform.matrices();
                 let shadow_uniforms = GpuShadowPassUniforms {
                     light_vp: mat_to_gpu(lv_proj),
-                    model: mat_to_gpu(model),
+                    model: geom.model,
                 };
                 let uniform_buf =
                     self.device
@@ -800,17 +831,15 @@ impl WGSLRenderer {
                     }],
                 });
                 pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, vbuf.slice(..));
-                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..index_count, 0, 0..1);
+                pass.set_vertex_buffer(0, geom.vbuf.slice(..));
+                pass.set_index_buffer(geom.ibuf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..geom.index_count, 0, 0..1);
             }
         }
 
-        (shadow_texture, shadow_block)
+        shadow_block
     }
 
-    /// Internal render method shared by `render_objects` and `render_wireframe`.
-    /// When `wireframe` is true the wireframe pipeline is used and lights/shadows are ignored.
     fn render_scene(
         &self,
         objects: &[Object],
@@ -828,9 +857,7 @@ impl WGSLRenderer {
             &self.pipeline
         };
 
-        // Seed the GPU colour texture from the CPU framebuffer so that the skybox
-        // (drawn directly to the CPU framebuffer) is preserved in the GPU render pass.
-        // write_texture flushes before the next submit, so the render pass LoadOp::Load sees it.
+        // Seed the GPU colour texture from the CPU framebuffer so the skybox is preserved.
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &gpu_fb.colour,
@@ -851,32 +878,31 @@ impl WGSLRenderer {
             },
         );
 
+        // Upload all geometry once; both shadow and main passes share these buffers.
+        let geoms = Self::upload_geoms(&self.device, objects);
+
+        // Populate the material cache for every object in this frame.
+        for obj in objects {
+            self.ensure_cached(&obj.material);
+        }
+
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        // Shadow pass: skip during wireframe, or when there are no lights.
-        let (shadow_texture, shadow_block) = if !wireframe && !lights.is_empty() {
-            self.build_shadow_maps(&mut encoder, lights, objects, camera)
+        let shadow_block = if !wireframe && !lights.is_empty() {
+            self.build_shadow_maps(&mut encoder, lights, &geoms, camera)
         } else {
-            // Dummy 1×1 texture — never sampled (no lights or wireframe mode).
-            (
-                self.create_shadow_texture(1),
-                GpuShadowBlock {
-                    light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
-                },
-            )
+            GpuShadowBlock {
+                light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
+            }
         };
 
-        let shadow_array_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        let shadow_comparison_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("shadow_comparison_sampler"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            compare: Some(wgpu::CompareFunction::LessEqual),
-            ..Default::default()
-        });
+        // Shadow resources reuse the pre-allocated texture and sampler.
+        let shadow_array_view = self
+            .shadow_texture
+            .create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
         let shadow_block_buf = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -884,6 +910,19 @@ impl WGSLRenderer {
                 contents: bytemuck::bytes_of(&shadow_block),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
+
+        // Hold Arc handles for cached materials so their views stay valid through the pass.
+        let mat_handles: Vec<Arc<CachedMaterial>> = objects
+            .iter()
+            .map(|obj| {
+                Arc::clone(
+                    self.mat_cache
+                        .borrow()
+                        .get(&material_key(&obj.material))
+                        .unwrap(),
+                )
+            })
+            .collect();
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -910,11 +949,15 @@ impl WGSLRenderer {
             pass.set_pipeline(pipeline);
             let light_buf = Self::build_light_block(&self.device, lights);
             let empty_light_buf = Self::build_light_block(&self.device, &[]);
-            for obj in objects {
-                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
+
+            let shadow_bindings = ShadowBindings {
+                view: &shadow_array_view,
+                sampler: &self.shadow_sampler,
+                block_buf: &shadow_block_buf,
+            };
+
+            for ((geom, obj), mat) in geoms.iter().zip(objects.iter()).zip(mat_handles.iter()) {
                 let uniform_buf = Self::build_uniforms(&self.device, obj, camera, ambient);
-                let (_tex, tex_view, tex_sampler) =
-                    Self::upload_material_texture(&self.device, &self.queue, &obj.material);
                 let active_light_buf = if obj.is_light {
                     &empty_light_buf
                 } else {
@@ -923,23 +966,17 @@ impl WGSLRenderer {
                 let bind_group = self.build_bind_group(
                     &uniform_buf,
                     active_light_buf,
-                    &tex_view,
-                    &tex_sampler,
-                    &ShadowBindings {
-                        view: &shadow_array_view,
-                        sampler: &shadow_comparison_sampler,
-                        block_buf: &shadow_block_buf,
-                    },
+                    &mat.view,
+                    &shadow_bindings,
                 );
 
                 pass.set_bind_group(0, &bind_group, &[]);
-                pass.set_vertex_buffer(0, vbuf.slice(..));
-                pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..index_count, 0, 0..1);
+                pass.set_vertex_buffer(0, geom.vbuf.slice(..));
+                pass.set_index_buffer(geom.ibuf.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..geom.index_count, 0, 0..1);
             }
         }
 
-        // Create the view before dropping the Ref borrow on gpu_fb
         let colour_view = gpu_fb.colour.create_view(&Default::default());
         drop(gpu_fb);
 
@@ -962,8 +999,6 @@ impl WGSLRenderer {
 }
 
 impl super::Renderer for WGSLRenderer {
-    /// Renders all objects with Phong shading and shadow maps, copies the result from the GPU
-    /// to the CPU framebuffer, and returns triangle statistics.
     fn render_objects(
         &self,
         objects: &[Object],
@@ -975,8 +1010,6 @@ impl super::Renderer for WGSLRenderer {
         self.render_scene(objects, camera, lights, framebuffer, ambient, false)
     }
 
-    /// Renders all objects as flat-white wireframes using `PolygonMode::Line`, then copies the
-    /// result to the CPU framebuffer.
     fn render_wireframe(
         &self,
         objects: &[Object],
