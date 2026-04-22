@@ -2,7 +2,6 @@ pub mod display;
 
 use crate::framebuffer::Framebuffer;
 use crate::geometry::object::Object;
-use crate::maths::GpuMat4;
 use crate::maths::mat4::Mat4;
 use crate::maths::vec2::Vec2;
 use crate::maths::vec3::Vec3;
@@ -18,56 +17,6 @@ use wgpu::util::DeviceExt;
 /// There needs to be a maximum number of lights as we need fixed size arrays
 const MAX_LIGHTS: usize = 8;
 const SHADOW_MAP_GPU_SIZE: u32 = 512;
-const SHADOW_NEAR: f32 = 0.1;
-const SHADOW_FAR: f32 = 100.0;
-
-fn cube_face_views(pos: Vec3) -> [Mat4; 6] {
-    fn look_at(eye: Vec3, target: Vec3, up: Vec3) -> Mat4 {
-        let f = (target - eye).normalise();
-        let r = f.cross(up).normalise();
-        let u = r.cross(f);
-        Mat4 {
-            m: [
-                [r.x, r.y, r.z, -r.dot(eye)],
-                [u.x, u.y, u.z, -u.dot(eye)],
-                [-f.x, -f.y, -f.z, f.dot(eye)],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-        }
-    }
-    [
-        look_at(
-            pos,
-            pos + Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        ),
-        look_at(
-            pos,
-            pos + Vec3::new(-1.0, 0.0, 0.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        ),
-        look_at(
-            pos,
-            pos + Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(0.0, 0.0, 1.0),
-        ),
-        look_at(
-            pos,
-            pos + Vec3::new(0.0, -1.0, 0.0),
-            Vec3::new(0.0, 0.0, -1.0),
-        ),
-        look_at(
-            pos,
-            pos + Vec3::new(0.0, 0.0, 1.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        ),
-        look_at(
-            pos,
-            pos + Vec3::new(0.0, 0.0, -1.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        ),
-    ]
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -81,13 +30,13 @@ pub struct GpuVertex {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuUniforms {
-    model: GpuMat4,      // 64 bytes
-    view: GpuMat4,       // 64 bytes
-    proj: GpuMat4,       // 64 bytes
-    normal_mat: GpuMat4, // 64 bytes
-    cam_pos: [f32; 4],   // 16 bytes
-    ambient: f32,        //  4 bytes
-    _pad: [f32; 3],      // 12 bytes — pads struct to 288, matching WGSL alignment
+    model: [[f32; 4]; 4],      // 64 bytes
+    view: [[f32; 4]; 4],       // 64 bytes
+    proj: [[f32; 4]; 4],       // 64 bytes
+    normal_mat: [[f32; 4]; 4], // 64 bytes
+    cam_pos: [f32; 4],         // 16 bytes
+    ambient: f32,              //  4 bytes
+    _pad: [f32; 3],            // 12 bytes — pads struct to 288, matching WGSL alignment
 }
 
 #[repr(C)]
@@ -111,20 +60,19 @@ struct GpuLightBlock {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuShadowPassUniforms {
-    light_vp: GpuMat4,
-    model: GpuMat4,
+    light_vp: [[f32; 4]; 4],
+    model: [[f32; 4]; 4],
 }
 
 /// One view-projection matrix per light, sent to the main shader for shadow lookups.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuShadowBlock {
-    light_vp: [GpuMat4; MAX_LIGHTS],
+    light_vp: [[[f32; 4]; 4]; MAX_LIGHTS],
 }
 
 struct ShadowBindings<'a> {
-    spot_view: &'a wgpu::TextureView,
-    point_view: &'a wgpu::TextureView,
+    view: &'a wgpu::TextureView,
     sampler: &'a wgpu::Sampler,
     block_buf: &'a wgpu::Buffer,
 }
@@ -148,6 +96,11 @@ struct GpuFramebuffer {
     depth_view: wgpu::TextureView,
     width: u32,
     height: u32,
+}
+
+fn mat_to_gpu(m: Mat4) -> [[f32; 4]; 4] {
+    // Mat4 is row-major; WGSL mat4x4 is column-major — transpose before upload.
+    m.transpose().m
 }
 
 /// wgpu (Vulkan convention) expects NDC depth in [0, 1] with 0 at the near plane.
@@ -388,17 +341,6 @@ impl WGSLRenderer {
                     },
                     count: None,
                 },
-                // @binding(7) — point light cube-array shadow map
-                wgpu::BindGroupLayoutEntry {
-                    binding: 7,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::CubeArray,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
             ],
         })
     }
@@ -611,10 +553,10 @@ impl WGSLRenderer {
     ) -> wgpu::Buffer {
         let (model, normal_mat) = obj.transform.matrices();
         let data = GpuUniforms {
-            model: model.into(),
-            view: camera.view_matrix().into(),
-            proj: gpu_projection_matrix(camera).into(),
-            normal_mat: normal_mat.into(),
+            model: mat_to_gpu(model),
+            view: mat_to_gpu(camera.view_matrix()),
+            proj: mat_to_gpu(gpu_projection_matrix(camera)),
+            normal_mat: mat_to_gpu(normal_mat),
             cam_pos: [camera.position.x, camera.position.y, camera.position.z, 0.0],
             ambient,
             _pad: [0.0; 3],
@@ -755,7 +697,7 @@ impl WGSLRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: wgpu::BindingResource::TextureView(shadow.spot_view),
+                    resource: wgpu::BindingResource::TextureView(shadow.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
@@ -764,10 +706,6 @@ impl WGSLRenderer {
                 wgpu::BindGroupEntry {
                     binding: 6,
                     resource: shadow.block_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: wgpu::BindingResource::TextureView(shadow.point_view),
                 },
             ],
         })
@@ -792,57 +730,39 @@ impl WGSLRenderer {
         })
     }
 
-    /// Creates a `Depth32Float` cube-array texture with `MAX_LIGHTS * 6` layers used for
-    /// point light shadow maps. Pass `size = 1` for a cheap dummy.
-    fn create_point_shadow_texture(&self, size: u32) -> wgpu::Texture {
-        self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("point_shadow_cube_array"),
-            size: wgpu::Extent3d {
-                width: size,
-                height: size,
-                depth_or_array_layers: MAX_LIGHTS as u32 * 6,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        })
-    }
-
-    /// Encodes depth-only render passes per light into `encoder`:
-    /// - Spot lights: one pass per light into `shadow_texture` (2D array, one layer per light).
-    /// - Point lights: six passes per light into `point_shadow_texture` (cube array, 6 layers per light).
-    ///
-    /// Returns both textures and the `GpuShadowBlock` of spot-light VP matrices for the shader.
+    /// Encodes one depth-only render pass per light into `encoder`, writing results into the
+    /// corresponding layer of a `MAX_LIGHTS`-layer shadow texture array.
+    /// Returns the shadow texture and the `GpuShadowBlock` of light VP matrices for the shader.
     fn build_shadow_maps(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         lights: &[Arc<dyn Light>],
         objects: &[Object],
-    ) -> (wgpu::Texture, wgpu::Texture, GpuShadowBlock) {
+        camera: &Camera,
+    ) -> (wgpu::Texture, GpuShadowBlock) {
         let shadow_texture = self.create_shadow_texture(SHADOW_MAP_GPU_SIZE);
-        let point_shadow_texture = self.create_point_shadow_texture(SHADOW_MAP_GPU_SIZE);
         let mut shadow_block = GpuShadowBlock {
-            light_vp: [<GpuMat4 as bytemuck::Zeroable>::zeroed(); MAX_LIGHTS],
+            light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
         };
 
-        /// Helper: encode one shadow pass into a specific texture layer.
-        fn encode_shadow_pass(
-            device: &wgpu::Device,
-            encoder: &mut wgpu::CommandEncoder,
-            shadow_pipeline: &wgpu::RenderPipeline,
-            shadow_bind_group_layout: &wgpu::BindGroupLayout,
-            layer_view: &wgpu::TextureView,
-            light_vp: Mat4,
-            objects: &[Object],
-        ) {
+        for (light_idx, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
+            let lv_proj = light_gpu_view_proj(light.as_ref(), camera.near, camera.far);
+            shadow_block.light_vp[light_idx] = mat_to_gpu(lv_proj);
+
+            // View into this light's layer of the shadow texture array.
+            let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("shadow_layer_view"),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: light_idx as u32,
+                array_layer_count: Some(1),
+                ..Default::default()
+            });
+
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("shadow_pass"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: layer_view,
+                    view: &layer_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -851,26 +771,29 @@ impl WGSLRenderer {
                 }),
                 ..Default::default()
             });
-            pass.set_pipeline(shadow_pipeline);
+
+            pass.set_pipeline(&self.shadow_pipeline);
 
             for obj in objects {
                 if obj.is_light {
                     continue;
                 }
-                let (vbuf, ibuf, index_count) = WGSLRenderer::upload_object(device, obj);
+                let (vbuf, ibuf, index_count) = Self::upload_object(&self.device, obj);
                 let (model, _) = obj.transform.matrices();
                 let shadow_uniforms = GpuShadowPassUniforms {
-                    light_vp: light_vp.into(),
-                    model: model.into(),
+                    light_vp: mat_to_gpu(lv_proj),
+                    model: mat_to_gpu(model),
                 };
-                let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("shadow_pass_uniforms"),
-                    contents: bytemuck::bytes_of(&shadow_uniforms),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-                let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                let uniform_buf =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("shadow_pass_uniforms"),
+                            contents: bytemuck::bytes_of(&shadow_uniforms),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        });
+                let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("shadow_pass_bg"),
-                    layout: shadow_bind_group_layout,
+                    layout: &self.shadow_bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: uniform_buf.as_entire_binding(),
@@ -883,63 +806,7 @@ impl WGSLRenderer {
             }
         }
 
-        for (light_idx, light) in lights.iter().take(MAX_LIGHTS).enumerate() {
-            if light.spot_direction().is_some() {
-                // --- Spot light: single shadow pass into the 2D array ---
-                let lv_proj = light_gpu_view_proj(light.as_ref(), SHADOW_NEAR, SHADOW_FAR);
-                shadow_block.light_vp[light_idx] = lv_proj.into();
-
-                let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some("shadow_layer_view"),
-                    dimension: Some(wgpu::TextureViewDimension::D2),
-                    base_array_layer: light_idx as u32,
-                    array_layer_count: Some(1),
-                    ..Default::default()
-                });
-
-                encode_shadow_pass(
-                    &self.device,
-                    encoder,
-                    &self.shadow_pipeline,
-                    &self.shadow_bind_group_layout,
-                    &layer_view,
-                    lv_proj,
-                    objects,
-                );
-            } else {
-                // --- Point light: six shadow passes into the cube array ---
-                let pos = light.position();
-                let cube_proj =
-                    gpu_perspective(std::f32::consts::FRAC_PI_2, 1.0, SHADOW_NEAR, SHADOW_FAR);
-                let face_views = cube_face_views(pos);
-
-                for (face, _) in face_views.iter().enumerate() {
-                    let layer = (light_idx * 6 + face) as u32;
-                    let light_vp = cube_proj * face_views[face];
-
-                    let layer_view =
-                        point_shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                            label: Some("point_shadow_layer_view"),
-                            dimension: Some(wgpu::TextureViewDimension::D2),
-                            base_array_layer: layer,
-                            array_layer_count: Some(1),
-                            ..Default::default()
-                        });
-
-                    encode_shadow_pass(
-                        &self.device,
-                        encoder,
-                        &self.shadow_pipeline,
-                        &self.shadow_bind_group_layout,
-                        &layer_view,
-                        light_vp,
-                        objects,
-                    );
-                }
-            }
-        }
-
-        (shadow_texture, point_shadow_texture, shadow_block)
+        (shadow_texture, shadow_block)
     }
 
     /// Internal render method shared by `render_objects` and `render_wireframe`.
@@ -987,26 +854,20 @@ impl WGSLRenderer {
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
         // Shadow pass: skip during wireframe, or when there are no lights.
-        let (shadow_texture, point_shadow_texture, shadow_block) =
-            if !wireframe && !lights.is_empty() {
-                self.build_shadow_maps(&mut encoder, lights, objects)
-            } else {
-                // Dummy 1×1 textures — never sampled (no lights or wireframe mode).
-                (
-                    self.create_shadow_texture(1),
-                    self.create_point_shadow_texture(1),
-                    GpuShadowBlock {
-                        light_vp: [<GpuMat4 as bytemuck::Zeroable>::zeroed(); MAX_LIGHTS],
-                    },
-                )
-            };
+        let (shadow_texture, shadow_block) = if !wireframe && !lights.is_empty() {
+            self.build_shadow_maps(&mut encoder, lights, objects, camera)
+        } else {
+            // Dummy 1×1 texture — never sampled (no lights or wireframe mode).
+            (
+                self.create_shadow_texture(1),
+                GpuShadowBlock {
+                    light_vp: [[[0.0f32; 4]; 4]; MAX_LIGHTS],
+                },
+            )
+        };
 
         let shadow_array_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
-        let point_shadow_view = point_shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::CubeArray),
             ..Default::default()
         });
         let shadow_comparison_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
@@ -1065,8 +926,7 @@ impl WGSLRenderer {
                     &tex_view,
                     &tex_sampler,
                     &ShadowBindings {
-                        spot_view: &shadow_array_view,
-                        point_view: &point_shadow_view,
+                        view: &shadow_array_view,
                         sampler: &shadow_comparison_sampler,
                         block_buf: &shadow_block_buf,
                     },
